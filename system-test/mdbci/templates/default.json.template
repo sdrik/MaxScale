@@ -405,14 +405,13 @@
             {
                 "name": "${product}",
                 "version": "${version}",
-		"cnf_template": "server1.cnf",
-                "cnf_template_path": "${cnf_path}"
+		"cnf_template": "server1.cnf"
             },
             {
-                "name": "mdbe_plugin_columnstore",
-                "version": "${version}"
+                "name": "plugin_columnstore"
             }
         ],
+	"cnf_template_path": "${cnf_path}",
         "labels" : [
                 "COLUMNSTORE_BACKEND"
         ]
@@ -427,14 +426,13 @@
             {
                 "name": "${product}",
                 "version": "${version}",
-		"cnf_template": "server2.cnf",
-                "cnf_template_path": "${cnf_path}"
+		"cnf_template": "server2.cnf"
             },
             {
-                "name": "mdbe_plugin_columnstore",
-                "version": "${version}"
+                "name": "plugin_columnstore"
             }
         ],
+	"cnf_template_path": "${cnf_path}",
         "labels" : [
                 "COLUMNSTORE_BACKEND"
         ]
@@ -449,14 +447,13 @@
             {
                 "name": "${product}",
                 "version": "${version}",
-		"cnf_template": "server3.cnf",
-                "cnf_template_path": "${cnf_path}"
+		"cnf_template": "server3.cnf"
             },
             {
-                "name": "mdbe_plugin_columnstore",
-                "version": "${version}"
+                "name": "plugin_columnstore"
             }
         ],
+	"cnf_template_path": "${cnf_path}",
         "labels" : [
                 "COLUMNSTORE_BACKEND"
         ]
