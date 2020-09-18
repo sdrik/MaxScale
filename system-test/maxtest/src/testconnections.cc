@@ -39,11 +39,12 @@ const string label_repl_be = "REPL_BACKEND";
 const string label_galera_be = "GALERA_BACKEND";
 const string label_big_be = "BIG_REPL_BACKEND";
 const string label_2nd_mxs = "SECOND_MAXSCALE";
-const string label_cs_be = "COLUMNSTORE_BACKEND";
 const string label_clx_be = "CLUSTRIX_BACKEND";
+const string label_columnstore_be = "COLUMNSTORE_BACKEND";
+
 
 const StringSet recognized_mdbci_labels =
-{label_repl_be, label_big_be, label_galera_be, label_2nd_mxs, label_cs_be, label_clx_be};
+{label_repl_be, label_big_be, label_galera_be, label_2nd_mxs, label_columnstore_be, label_clx_be};
 
 const int MDBCI_FAIL = 200;     // Exit code when failure caused by MDBCI non-zero exit
 const int BROKEN_VM_FAIL = 201; // Exit code when failure caused by broken VMs
@@ -228,6 +229,12 @@ TestConnections::TestConnections(int argc, char* argv[])
         use_clustrix = true;
     }
 
+    bool use_columnstore = false;
+    if (m_required_mdbci_labels.count(label_columnstore_be) > 0)
+    {
+        use_columnstore = true;
+    }
+
     std::future<bool> repl_future;
     std::future<bool> galera_future;
 
@@ -271,6 +278,20 @@ TestConnections::TestConnections(int argc, char* argv[])
     else
     {
         clustrix = NULL;
+    }
+
+    if (use_columnstore)
+    {
+        columnstore = new Columnstore_nodes("columnstore", test_dir, verbose, m_network_config);
+        columnstore->setup();
+        columnstore->set_use_ipv6(false);
+        columnstore->take_snapshot_command = m_take_snapshot_command.c_str();
+        columnstore->revert_snapshot_command = m_revert_snapshot_command.c_str();
+        //columnstore->fix_replication();
+    }
+    else
+    {
+        columnstore = NULL;
     }
 
     maxscales = new Maxscales("maxscale", test_dir, verbose, m_network_config);
@@ -683,11 +704,12 @@ void TestConnections::process_template(int m, const string& cnf_template_path, c
     sprintf(str, "sed -i \"s/###threads###/%d/\"  maxscale.cnf", m_threads);
     system(str);
 
-    Mariadb_nodes* mdn[3];
+    Mariadb_nodes* mdn[4];
     const char* IPcnf;
     mdn[0] = repl;
     mdn[1] = galera;
     mdn[2] = clustrix;
+    mdn[3] = columnstore;
     int i, j;
     int mdn_n = 3;
 
@@ -2093,7 +2115,9 @@ int TestConnections::call_mdbci(const char* options)
 int TestConnections::process_mdbci_template()
 {
     string box = envvar_get_set("box", "centos_7_libvirt");
-    envvar_get_set("backend_box", "%s", box.c_str());
+    string backend_box = envvar_get_set("backend_box", "%s", box.c_str());
+    envvar_get_set("columnstore_box", "%s", backend_box.c_str());
+    envvar_get_set("clustrix_box", "%s", backend_box.c_str());
     envvar_get_set("target", "develop");
     envvar_get_set("vm_memory", "2048");
 

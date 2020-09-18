@@ -10,6 +10,7 @@
 #     GALERA_BACKEND
 #     EXTERN_BACKEND
 #     CS_BACKEND
+#     COLUMNSTORE_BACKEND
 #     BREAKS_REPL
 #     BREAKS_GALERA
 set(CTEST_BUILD_NAME "${BUILDNAME}")
@@ -1095,6 +1096,16 @@ add_test_executable(clustrix_distribution.cpp clustrix_distribution clustrix_dis
 
 ############################################
 # END: tests for Clustrix monitor          #
+############################################
+
+############################################
+# BEGIN: tests for Columnstore monitor        #
+############################################
+
+add_test_executable(columnstore_proto.cpp columnstore_proto replication LABELS COLUMNSTORE_BACKEND)
+
+############################################
+# END: tests for Columnstore monitor          #
 ############################################
 
 ###############################

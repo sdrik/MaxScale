@@ -13,6 +13,7 @@
 #include <maxtest/clustrix_nodes.hh>
 #include <maxtest/mariadb_nodes.hh>
 #include <maxtest/maxscales.hh>
+#include <maxtest/columnstore_nodes.hh>
 #include <maxtest/test_dir.hh>
 
 typedef std::set<std::string> StringSet;
@@ -102,6 +103,8 @@ public:
      * @brief maxscales Maxscale object containing referebces to all Maxscale machines
      */
     Maxscales* maxscales {nullptr};
+
+    Columnstore_nodes* columnstore{nullptr};
 
     /**
      * @brief copy_mariadb_logs copies MariaDB logs from backend
