@@ -752,8 +752,6 @@ add_test_executable(test_hints.cpp test_hints hints2 LABELS hintfilter readwrite
 
 
 # Creates KDC and tries authrization via GSSAPI (both client and backend)
-# works only with yum-based distributions
-# TODO: make it working with zypper and apt, move part of KDC setup to MDBCI
 add_test_executable(kerberos_setup.cpp kerberos_setup kerberos LABELS HEAVY gssapi REPL_BACKEND)
 add_test_derived(kerberos_setup_ssl kerberos_setup kerberos_ssl LABELS HEAVY gssapi BACKEND_SSL REPL_BACKEND)
 
@@ -978,6 +976,10 @@ add_test_executable(mxs3218_ldli_crash.cc mxs3218_ldli_crash replication LABELS 
 
 # MXS-3220: Crash on master reconnection with session command
 add_test_executable(mxs3220_reconnect_crash.cc mxs3220_reconnect_crash mxs3220_reconnect_crash LABELS REPL_BACKEND readwritesplit)
+
+# Test of creation users via Maxscale
+add_test_executable(DBAAS-5368_user_creation.cpp DBAAS-5368_user_creation replication LABELS readwritesplit maxscale REPL_BACKEND)
+
 
 ############################################
 # END: Normal tests                        #
