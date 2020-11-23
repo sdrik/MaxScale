@@ -42,6 +42,7 @@ int main(int argc, char* argv[])
     Test->tprintf("Creating users\n");
     for (int i = 0; i < users_num; i++)
     {
+        Test->set_timeout(10);
         Test->try_query(Test->maxscales->conn_rwsplit[0], "CREATE USER 'user%d'@'%%' identified by 'AaSs12345678^'", i);
         if (i == block_node_i)
         {
@@ -56,6 +57,7 @@ int main(int argc, char* argv[])
     }
 
     Test->tprintf("Waiting for slaves\n");
+    Test->set_timeout(1800);
     Test->repl->sync_slaves();
 
     Test->tprintf("Checking number of users in backend after test\n");
@@ -77,9 +79,10 @@ int main(int argc, char* argv[])
     Test->tprintf("Dropping users\n");
     for (int i = 0; i < users_num; i++)
     {
+        Test->set_timeout(10);
         Test->try_query(Test->maxscales->conn_rwsplit[0], "DROP USER 'user%d'@'%%'", i);
     }
-
+    Test->set_timeout(90);
     Test->maxscales->close_rwsplit(0);
 
     int rval = Test->global_result;
