@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-10-14
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -62,8 +62,7 @@ void run(TestConnections& test)
     auto& mxs = test.maxscale();
     mxs.wait_monitor_ticks();
 
-    int N = test.repl->N;
-    cout << "Nodes: " << N << endl;
+    const int N = 4;
 
     auto master = mxt::ServerInfo::MASTER | mxt::ServerInfo::RUNNING;
     auto slave = mxt::ServerInfo::SLAVE | mxt::ServerInfo::RUNNING;

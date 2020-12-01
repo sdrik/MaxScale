@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-10-14
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -929,8 +929,10 @@ bool mxs_admin_init()
                         "to enable HTTPS or add `admin_secure_gui=false` to allow use of the GUI without encryption.");
         }
 
-        // The port argument is ignored and the port in the struct sockaddr is used instead
-        this_unit.daemon = MHD_start_daemon(options, 0, NULL, NULL, handle_client, NULL,
+        // The port argument is only used for error reporting. The actual address and port that the daemon
+        // binds to is in the `struct sockaddr`.
+        this_unit.daemon = MHD_start_daemon(options, config.admin_port,
+                                            NULL, NULL, handle_client, NULL,
                                             MHD_OPTION_EXTERNAL_LOGGER, admin_log_error, NULL,
                                             MHD_OPTION_NOTIFY_COMPLETED, close_client, NULL,
                                             MHD_OPTION_SOCK_ADDR, &addr,

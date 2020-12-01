@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-10-14
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -33,6 +33,9 @@ const time_t FAILOVER_DURATION = 5;
 
 // The test now runs only two failovers. Change for a longer time limit later.
 // TODO: add semisync to remove this limitation.
+
+// Number of backends
+const int N = 4;
 
 #define CMESSAGE(msg) \
     do { \
@@ -506,7 +509,7 @@ bool is_valid_server_id(TestConnections& test, int id)
     std::set<int> ids;
     test.repl->connect();
 
-    for (int i = 0; i < test.repl->N; i++)
+    for (int i = 0; i < N; i++)
     {
         ids.insert(test.repl->get_server_id(i));
     }
