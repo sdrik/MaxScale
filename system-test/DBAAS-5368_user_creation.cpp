@@ -8,16 +8,35 @@
 
 using namespace std;
 
+void* switch_thread(void* data)
+{
+    TestConnections* Test = (TestConnections*)data;
+    sleep(20);
+    Test->tprintf("Switchover!");
+    Test->maxscales->ssh_node_f(0, true, "maxctrl call command mariadbmon switchover MySQL-Monitor server2 server1");
+    sleep(20);
+    Test->tprintf("Block server1");
+    Test->repl->block_node(0);
+    sleep(20);
+    Test->tprintf("Unblock server1");
+    Test->repl->unblock_node(0);
+    Test->tprintf("Switchover!");
+    Test->maxscales->ssh_node_f(0, true, "maxctrl call command mariadbmon switchover MySQL-Monitor server1 server2");
+
+    return NULL;
+}
+
 
 int main(int argc, char* argv[])
 {
 
     int silent = 1;
     int i;
-    int users_num = 100000;
-    int block_node_i = 3000;
-    int unblock_node_i = 70000;
+    int users_num = 10000;
 
+    pthread_t thread;
+
+    Mariadb_nodes::require_gtid(true);
     TestConnections* Test = new TestConnections(argc, argv);
     Test->set_timeout(120);
     int users_num_before[Test->repl->N];
@@ -38,22 +57,13 @@ int main(int argc, char* argv[])
     Test->tprintf("Connecting to RWSplit %s\n", Test->maxscales->ip4(0));
     Test->maxscales->connect_rwsplit(0);
 
+    pthread_create(&thread, NULL, switch_thread, Test);
 
     Test->tprintf("Creating users\n");
     for (int i = 0; i < users_num; i++)
     {
         Test->set_timeout(10);
         Test->try_query(Test->maxscales->conn_rwsplit[0], "CREATE USER 'user%d'@'%%' identified by 'AaSs12345678^'", i);
-        if (i == block_node_i)
-        {
-            Test->tprintf("Block one node");
-            Test->repl->block_node(1);
-        }
-        if (i == unblock_node_i)
-        {
-            Test->tprintf("Unblock...");
-            Test->repl->unblock_node(1);
-        }
     }
 
     Test->tprintf("Waiting for slaves\n");
