@@ -910,7 +910,7 @@ add_test_executable(mxs3218_ldli_crash.cc mxs3218_ldli_crash replication LABELS 
 add_test_executable(mxs3220_reconnect_crash.cc mxs3220_reconnect_crash mxs3220_reconnect_crash LABELS REPL_BACKEND readwritesplit)
 
 # Test of creation users via Maxscale
-add_test_executable(DBAAS-5368_user_creation.cpp DBAAS-5368_user_creation replication LABELS readwritesplit maxscale REPL_BACKEND)
+add_test_executable(DBAAS-5368_user_creation.cpp DBAAS-5368_user_creation dbaas-5368_user_creation LABELS readwritesplit maxscale REPL_BACKEND)
 
 
 ############################################

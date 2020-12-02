@@ -20,6 +20,7 @@ void* switch_thread(void* data)
     sleep(20);
     Test->tprintf("Unblock server1");
     Test->repl->unblock_node(0);
+    sleep(20);
     Test->tprintf("Switchover!");
     Test->maxscales->ssh_node_f(0, true, "maxctrl call command mariadbmon switchover MySQL-Monitor server1 server2");
 
@@ -32,7 +33,7 @@ int main(int argc, char* argv[])
 
     int silent = 1;
     int i;
-    int users_num = 10000;
+    int users_num = 40000;
 
     pthread_t thread;
 
@@ -57,6 +58,9 @@ int main(int argc, char* argv[])
     Test->tprintf("Connecting to RWSplit %s\n", Test->maxscales->ip4(0));
     Test->maxscales->connect_rwsplit(0);
 
+    Test->tprintf("Revoke super from %s", Test->maxscales->user_name.c_str());
+    Test->try_query(Test->maxscales->conn_rwsplit[0], "REVOKE SUPER ON *.* FROM '%s'@'%%'", Test->maxscales->user_name.c_str());
+
     pthread_create(&thread, NULL, switch_thread, Test);
 
     Test->tprintf("Creating users\n");
@@ -69,6 +73,7 @@ int main(int argc, char* argv[])
     Test->tprintf("Waiting for slaves\n");
     Test->set_timeout(1800);
     Test->repl->sync_slaves();
+    sleep(30);
 
     Test->tprintf("Checking number of users in backend after test\n");
 
@@ -89,11 +94,15 @@ int main(int argc, char* argv[])
     Test->tprintf("Dropping users\n");
     for (int i = 0; i < users_num; i++)
     {
-        Test->set_timeout(10);
+        Test->set_timeout(20);
         Test->try_query(Test->maxscales->conn_rwsplit[0], "DROP USER 'user%d'@'%%'", i);
     }
     Test->set_timeout(90);
     Test->maxscales->close_rwsplit(0);
+
+    Nodes::SshResult sr = Test->maxscales->ssh_output("maxctrl show servers", 0, true);
+    Test->tprintf("%s", sr.output.c_str());
+
 
     int rval = Test->global_result;
     delete Test;
