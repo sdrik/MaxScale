@@ -62,6 +62,8 @@ int main(int argc, char* argv[])
     Test->try_query(Test->maxscales->conn_rwsplit[0], "GRANT CREATE USER, SELECT ON *.* TO 'creator'@'%%' WITH GRANT OPTION");
     Test->repl->sync_slaves();
     Test->maxscales->close_rwsplit(0);
+    string user = Test->maxscales->user_name;
+    string pass = Test->maxscales->password;
     Test->maxscales->user_name = "creator";
     Test->maxscales->password = "AaSs12345678";
     Test->maxscales->connect_rwsplit(0);
@@ -78,6 +80,10 @@ int main(int argc, char* argv[])
         Test->set_timeout(10);
         Test->try_query(Test->maxscales->conn_rwsplit[0], "CREATE USER 'user%d'@'%%' identified by 'AaSs12345678^'", i);
     }
+    Test->maxscales->close_rwsplit(0);
+    Test->maxscales->user_name = user;
+    Test->maxscales->password = pass;
+    Test->maxscales->connect_rwsplit(0);
 
     Test->tprintf("Waiting for slaves\n");
     Test->set_timeout(1800);
@@ -101,6 +107,7 @@ int main(int argc, char* argv[])
 
 
     Test->tprintf("Dropping users\n");
+    Test->try_query(Test->maxscales->conn_rwsplit[0], "DROP USER 'creator'@'%%'");
     for (int i = 0; i < users_num; i++)
     {
         Test->set_timeout(20);
@@ -110,7 +117,7 @@ int main(int argc, char* argv[])
     Test->maxscales->close_rwsplit(0);
 
     Nodes::SshResult sr = Test->maxscales->ssh_output("maxctrl show servers", 0, true);
-    Test->tprintf("%s", sr.output.c_str());
+    Test->tprintf("\n%s", sr.output.c_str());
 
 
     int rval = Test->global_result;
