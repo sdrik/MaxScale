@@ -57,11 +57,12 @@ int main(int argc, char* argv[])
 
     Test->tprintf("Connecting to RWSplit %s\n", Test->maxscales->ip4(0));
     Test->maxscales->connect_rwsplit(0);
-    Test->try_query(Test->maxscales->conn_rwsplit[0], "CREATE USER 'creator'@'%%' identified by 'AaSs12345678^'");
+    Test->try_query(Test->maxscales->conn_rwsplit[0], "CREATE USER 'creator'@'%%' identified by 'AaSs12345678'");
     Test->try_query(Test->maxscales->conn_rwsplit[0], "REVOKE SUPER ON *.* FROM 'creator'@'%%'");
+    Test->try_query(Test->maxscales->conn_rwsplit[0], "GRANT CREATE_USER ON *.* TO 'creator'@'%%' WITH GRANT OPTION");
     Test->maxscales->close_rwsplit(0);
     Test->maxscales->user_name = "creator";
-    Test->maxscales->password = "AaSs12345678^'";
+    Test->maxscales->password = "AaSs12345678'";
     Test->maxscales->connect_rwsplit(0);
 
 
