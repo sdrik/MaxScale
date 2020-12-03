@@ -82,7 +82,9 @@ int main(int argc, char* argv[])
         sprintf(sql, "CREATE USER 'user%d'@'%%' identified by 'AaSs12345678^'", i);
         if (execute_query_silent(Test->maxscales->conn_rwsplit[0], sql, false) != 0)
         {
+            Test->set_timeout(20);
             Test->maxscales->close_rwsplit(0);
+            sleep(5);
             Test->maxscales->connect_rwsplit(0);
             i--;
         }
@@ -94,8 +96,9 @@ int main(int argc, char* argv[])
 
     Test->tprintf("Waiting for slaves\n");
     Test->set_timeout(1800);
+    sleep(10);
     Test->repl->sync_slaves();
-    sleep(30);
+    sleep(10);
 
     Test->tprintf("Checking number of users in backend after test\n");
 
