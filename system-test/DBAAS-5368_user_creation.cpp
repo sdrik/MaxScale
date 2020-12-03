@@ -88,7 +88,7 @@ int main(int argc, char* argv[])
         Test->tprintf("%s", sql);
         if (execute_query_silent(Test->maxscales->conn_rwsplit[0], sql, false) != 0)
         {
-            Test->set_timeout(20);
+            Test->set_timeout(50);
             Test->maxscales->close_rwsplit(0);
             sleep(5);
             Test->maxscales->connect_rwsplit(0);
