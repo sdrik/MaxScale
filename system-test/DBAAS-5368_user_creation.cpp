@@ -88,10 +88,14 @@ int main(int argc, char* argv[])
         //Test->tprintf("%s", sql);
         if (execute_query_silent(Test->maxscales->conn_rwsplit[0], sql, false) != 0)
         {
+            Test->tprintf("CERATE USER failed, reconnect...");
             Test->set_timeout(180);
             Test->maxscales->close_rwsplit(0);
-            sleep(5);
+            Test->tprintf("...Connection closed");
+            //sleep(5);
+            Test->tprintf("Opening new connection...");
             Test->maxscales->connect_rwsplit(0);
+            Test->tprintf("... done!");
             i--;
             retries++;
         }
