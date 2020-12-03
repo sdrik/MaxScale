@@ -43,12 +43,20 @@ int main(int argc, char* argv[])
     Test->set_timeout(120);
     int users_num_before[Test->repl->N];
 
+    Test->tprintf("Connecting to RWSplit %s\n", Test->maxscales->ip4(0));
+    Test->maxscales->connect_rwsplit(0);
+    Test->try_query(Test->maxscales->conn_rwsplit[0], "CREATE USER 'creator'@'%%' identified by 'AaSs12345678'");
+    Test->try_query(Test->maxscales->conn_rwsplit[0], "REVOKE SUPER ON *.* FROM 'creator'@'%%'");
+    Test->try_query(Test->maxscales->conn_rwsplit[0], "GRANT CREATE USER, SELECT ON *.* TO 'creator'@'%%' WITH GRANT OPTION");
+    Test->repl->sync_slaves();
+    Test->maxscales->close_rwsplit(0);
+
+
     Test->repl->connect();
 
+    Test->tprintf("Checking number of users in backend before test\n");
     my_ulonglong rows[30];
     my_ulonglong n;
-
-    Test->tprintf("Checking number of users in backend before test\n");
     for (i = 0; i < Test->repl->N; i++)
     {
         Test->set_timeout(90);
@@ -58,13 +66,6 @@ int main(int argc, char* argv[])
     }
     Test->repl->close_connections();
 
-    Test->tprintf("Connecting to RWSplit %s\n", Test->maxscales->ip4(0));
-    Test->maxscales->connect_rwsplit(0);
-    Test->try_query(Test->maxscales->conn_rwsplit[0], "CREATE USER 'creator'@'%%' identified by 'AaSs12345678'");
-    Test->try_query(Test->maxscales->conn_rwsplit[0], "REVOKE SUPER ON *.* FROM 'creator'@'%%'");
-    Test->try_query(Test->maxscales->conn_rwsplit[0], "GRANT CREATE USER, SELECT ON *.* TO 'creator'@'%%' WITH GRANT OPTION");
-    Test->repl->sync_slaves();
-    Test->maxscales->close_rwsplit(0);
     string user = Test->maxscales->user_name;
     string pass = Test->maxscales->password;
     Test->maxscales->user_name = "creator";
@@ -78,11 +79,13 @@ int main(int argc, char* argv[])
     pthread_create(&thread, NULL, switch_thread, Test);
 
     char sql[64];
+    int retries = 0;
     Test->tprintf("Creating users\n");
     for (int i = 0; i < users_num; i++)
     {
         Test->set_timeout(10);
         sprintf(sql, "CREATE USER 'user%d'@'%%' identified by 'AaSs12345678^'", i);
+        Test->tprintf("%s", sql);
         if (execute_query_silent(Test->maxscales->conn_rwsplit[0], sql, false) != 0)
         {
             Test->set_timeout(20);
@@ -90,8 +93,10 @@ int main(int argc, char* argv[])
             sleep(5);
             Test->maxscales->connect_rwsplit(0);
             i--;
+            retries++;
         }
     }
+    Test->tprintf("%d users created, %d retries done", users_num, retries);
     Test->set_timeout(200);
     Test->maxscales->close_rwsplit(0);
     Test->maxscales->user_name = user;
