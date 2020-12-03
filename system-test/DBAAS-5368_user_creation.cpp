@@ -74,11 +74,18 @@ int main(int argc, char* argv[])
 
     pthread_create(&thread, NULL, switch_thread, Test);
 
+    char sql[64];
     Test->tprintf("Creating users\n");
     for (int i = 0; i < users_num; i++)
     {
         Test->set_timeout(10);
-        Test->try_query(Test->maxscales->conn_rwsplit[0], "CREATE USER 'user%d'@'%%' identified by 'AaSs12345678^'", i);
+        sprintf(sql, "CREATE USER 'user%d'@'%%' identified by 'AaSs12345678^'", i);
+        if (execute_query_silent(Test->maxscales->conn_rwsplit[0], sql, false) != 0)
+        {
+            Test->maxscales->close_rwsplit(0);
+            Test->maxscales->connect_rwsplit(0);
+            i--;
+        }
     }
     Test->maxscales->close_rwsplit(0);
     Test->maxscales->user_name = user;
