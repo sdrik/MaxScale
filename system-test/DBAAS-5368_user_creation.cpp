@@ -39,8 +39,10 @@ int main(int argc, char* argv[])
 
     Mariadb_nodes::require_gtid(true);
     TestConnections* Test = new TestConnections(argc, argv);
+
     Test->set_timeout(120);
     int users_num_before[Test->repl->N];
+
     Test->repl->connect();
 
     my_ulonglong rows[30];
@@ -54,6 +56,7 @@ int main(int argc, char* argv[])
         users_num_before[i] = rows[0];
         Test->tprintf("node %d, users %d", i, users_num_before[i]);
     }
+    Test->repl->close_connections();
 
     Test->tprintf("Connecting to RWSplit %s\n", Test->maxscales->ip4(0));
     Test->maxscales->connect_rwsplit(0);
@@ -102,6 +105,8 @@ int main(int argc, char* argv[])
 
     Test->tprintf("Checking number of users in backend after test\n");
 
+    Test->repl->connect();
+
     int x;
     for (i = 0; i < Test->repl->N; i++)
     {
@@ -114,6 +119,7 @@ int main(int argc, char* argv[])
             Test->add_failure("Wring number of users on the node %d", i);
         }
     }
+    Test->repl->close_connections();
 
 
     Test->tprintf("Dropping users\n");
