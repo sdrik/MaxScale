@@ -92,6 +92,7 @@ int main(int argc, char* argv[])
             i--;
         }
     }
+    Test->set_timeout(200);
     Test->maxscales->close_rwsplit(0);
     Test->maxscales->user_name = user;
     Test->maxscales->password = pass;
