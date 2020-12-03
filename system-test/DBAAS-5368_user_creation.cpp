@@ -85,7 +85,7 @@ int main(int argc, char* argv[])
     {
         Test->set_timeout(10);
         sprintf(sql, "CREATE USER 'user%d'@'%%' identified by 'AaSs12345678^'", i);
-        Test->tprintf("%s", sql);
+        //Test->tprintf("%s", sql);
         if (execute_query_silent(Test->maxscales->conn_rwsplit[0], sql, false) != 0)
         {
             Test->set_timeout(50);
