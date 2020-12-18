@@ -1,5 +1,6 @@
 #!/bin/bash
 
+set -x
 # read the name of build scripts directory
 export script_dir="$(dirname $(readlink -f $0))"
 
