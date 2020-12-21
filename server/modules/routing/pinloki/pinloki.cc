@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -117,13 +117,13 @@ wall_time::TimePoint file_mod_time(const std::string& file_name)
 }
 
 /** Modification time of the oldest log file or wall_time::TimePoint::max() if there are no logs */
-wall_time::TimePoint oldest_logfile_time(Inventory* pInventory)
+wall_time::TimePoint oldest_logfile_time(InventoryWriter* pInventory)
 {
     auto ret = wall_time::TimePoint::max();
-    auto file_name = pInventory->first();
-    if (!file_name.empty())
+    const auto& file_names = pInventory->file_names();
+    if (!file_names.empty())
     {
-        ret = file_mod_time(file_name);
+        ret = file_mod_time(first_string(file_names));
     }
 
     return ret;
@@ -160,13 +160,6 @@ Pinloki::Pinloki(SERVICE* pService, Config&& config)
     , m_config(std::move(config))
     , m_inventory(m_config)
 {
-    if (auto ifs = std::ifstream(m_config.gtid_file_path()))
-    {
-        std::string gtid_list_str;
-        ifs >> gtid_list_str;
-        m_config.set_boot_strap_gtid_list(gtid_list_str);
-    }
-
     if (m_master_config.load(m_config))
     {
         if (m_master_config.slave_running)
@@ -216,8 +209,10 @@ json_t* Pinloki::diagnostics() const
     json_t* rval = json_object();
     std::lock_guard<std::mutex> guard(m_lock);
 
+    auto current_binlog = last_string(m_inventory.file_names());
+
     json_object_set_new(rval, "gtid_io_pos", json_string(gtid_io_pos().to_string().c_str()));
-    json_object_set_new(rval, "current_binlog", json_string(m_inventory.last().c_str()));
+    json_object_set_new(rval, "current_binlog", json_string(current_binlog.c_str()));
 
     json_t* cnf = json_object();
     json_object_set_new(cnf, "host", json_string(m_master_config.host.c_str()));
@@ -258,16 +253,26 @@ const Config& Pinloki::config() const
     return m_config;
 }
 
-Inventory* Pinloki::inventory()
+InventoryWriter* Pinloki::inventory()
 {
     return &m_inventory;
 }
 
-void Pinloki::change_master(const parser::ChangeMasterValues& values)
+std::string Pinloki::change_master(const parser::ChangeMasterValues& values)
 {
     std::lock_guard<std::mutex> guard(m_lock);
 
+    if (m_config.select_master())
+    {
+        MXB_SINFO("Turning off select_master functionality"
+                  " due to 'CHANGE MASTER TO' command. select_master"
+                  " will take effect again in the next MaxScale restart.");
+    }
+
+    m_config.disable_select_master();
+
     using CMT = pinloki::ChangeMasterType;
+    std::vector<std::string> errors;
 
     for (const auto& a : values)
     {
@@ -279,6 +284,10 @@ void Pinloki::change_master(const parser::ChangeMasterValues& values)
 
         case CMT::MASTER_PORT:
             m_master_config.port = atoi(a.second.c_str());
+            if (m_master_config.port == 0)
+            {
+                errors.push_back(MAKE_STR("Invalid port number " << a.second));
+            }
             break;
 
         case CMT::MASTER_USER:
@@ -290,7 +299,14 @@ void Pinloki::change_master(const parser::ChangeMasterValues& values)
             break;
 
         case CMT::MASTER_USE_GTID:
-            m_master_config.use_gtid = strcasecmp(a.second.c_str(), "slave_pos") == 0;
+            // slave_pos or current_pos, does not matter which
+            m_master_config.use_gtid = strcasecmp(a.second.c_str(), "slave_pos") == 0
+                || strcasecmp(a.second.c_str(), "current_pos") == 0;
+
+            if (!m_master_config.use_gtid)
+            {
+                errors.push_back("MASTER_USE_GTID must specify slave_pos or current_pos");
+            }
             break;
 
         case CMT::MASTER_SSL:
@@ -328,10 +344,112 @@ void Pinloki::change_master(const parser::ChangeMasterValues& values)
         case CMT::MASTER_SSL_VERIFY_SERVER_CERT:
             m_master_config.ssl_verify_server_cert = a.second.front() != '0';
             break;
+
+        case CMT::MASTER_LOG_FILE:
+        case CMT::MASTER_LOG_POS:
+        case CMT::RELAY_LOG_FILE:
+        case CMT::RELAY_LOG_POS:
+            errors.push_back("Binlogrouter does not support file/position based replication."
+                             " Use MASTER_USE_GTID=slave_pos.");
+            break;
+
+        case CMT::MASTER_HEARTBEAT_PERIOD:
+            MXB_SWARNING("Option " << to_string(a.first) << " ignored");
+            break;
+
+        default:
+            errors.push_back("Binlogrouter does not yet support the option " + to_string(a.first));
+            break;
         }
     }
 
-    m_master_config.save(m_config);
+    std::string err_str = mxb::join(errors, "\n");
+
+    if (err_str.empty())
+    {
+        m_master_config.save(m_config);
+    }
+
+    return err_str;
+}
+
+std::string Pinloki::verify_master_settings()
+{
+    if (m_config.select_master())
+    {
+        return "";
+    }
+
+    using CMT = pinloki::ChangeMasterType;
+    std::set<CMT> mandatory {CMT::MASTER_HOST, CMT::MASTER_PORT, CMT::MASTER_USER,
+                             CMT::MASTER_PASSWORD, CMT::MASTER_USE_GTID};
+    auto mandatory_notset {mandatory};
+    std::vector<std::string> errors;
+
+    for (const auto& m : mandatory)
+    {
+        bool erase = false;
+
+        switch (m)
+        {
+        case CMT::MASTER_HOST:
+            if (!m_master_config.host.empty())
+            {
+                erase = true;
+            }
+            break;
+
+        case CMT::MASTER_PORT:
+            if (m_master_config.port != 0)
+            {
+                erase = true;
+            }
+            break;
+
+        case CMT::MASTER_USER:
+            if (!m_master_config.user.empty())
+            {
+                erase = true;
+            }
+            break;
+
+        case CMT::MASTER_PASSWORD:
+            if (!m_master_config.password.empty())
+            {
+                erase = true;
+            }
+            break;
+
+        case CMT::MASTER_USE_GTID:
+            if (m_master_config.use_gtid)
+            {
+                erase = true;
+            }
+            break;
+
+        default:
+            break;
+        }
+
+        if (erase)
+        {
+            mandatory_notset.erase(m);
+        }
+    }
+
+    for (auto& v : mandatory_notset)
+    {
+        errors.push_back(MAKE_STR("Mandatory value " << to_string(v) << " not provided"));
+    }
+
+    std::string err_str = mxb::join(errors, "\n");
+
+    if (!err_str.empty())
+    {
+        MXS_SERROR(err_str);
+    }
+
+    return err_str;
 }
 
 bool Pinloki::is_slave_running() const
@@ -352,19 +470,26 @@ maxsql::Connection::ConnectionDetails Pinloki::generate_details()
             if (srv->is_master())
             {
                 details.host = mxb::Host(srv->address(), srv->port());
-                details.user = m_pService->config()->user;
-                details.password = m_pService->config()->password;
+                m_master_config.host = srv->address();
+                m_master_config.port = srv->port();
+                details.user = m_master_config.user = m_pService->config()->user;
+                details.password = m_master_config.password = m_pService->config()->password;
 
                 if (auto ssl = srv->ssl().config())
                 {
-                    details.ssl = true;
-                    details.ssl_ca = ssl->ca;
-                    details.ssl_cert = ssl->cert;
-                    details.ssl_crl = ssl->crl;
-                    details.ssl_key = ssl->key;
-                    details.ssl_cipher = ssl->cipher;
-                    details.ssl_verify_server_cert = ssl->verify_peer;
+                    details.ssl = m_master_config.ssl = true;
+                    details.ssl_ca = m_master_config.ssl_ca = ssl->ca;
+                    details.ssl_cert = m_master_config.ssl_cert = ssl->cert;
+                    details.ssl_crl = m_master_config.ssl_crl = ssl->crl;
+                    details.ssl_key = m_master_config.ssl_key = ssl->key;
+                    details.ssl_cipher = m_master_config.ssl_cipher = ssl->cipher;
+                    details.ssl_verify_server_cert =
+                        m_master_config.ssl_verify_server_cert = ssl->verify_peer;
                 }
+
+                m_master_config.use_gtid = true;
+                m_master_config.save(m_config);
+
                 break;
             }
         }
@@ -392,26 +517,25 @@ maxsql::Connection::ConnectionDetails Pinloki::generate_details()
     return details;
 }
 
-bool Pinloki::start_slave()
+std::string Pinloki::start_slave()
 {
-    bool rval = false;
     std::lock_guard<std::mutex> guard(m_lock);
     const auto& cfg = m_master_config;
 
-    if ((!cfg.host.empty() && cfg.port && !cfg.user.empty() && !cfg.password.empty())
-        || m_config.select_master())
+    std::string err_str = verify_master_settings();
+
+    if (err_str.empty())
     {
         MXS_INFO("Starting slave");
 
         Writer::Generator generator = std::bind(&Pinloki::generate_details, this);
         m_writer = std::make_unique<Writer>(generator, mxs::MainWorker::get(), inventory());
-        rval = true;
 
         m_master_config.slave_running = true;
         m_master_config.save(m_config);
     }
 
-    return rval;
+    return err_str;
 }
 
 void Pinloki::stop_slave()
@@ -420,9 +544,6 @@ void Pinloki::stop_slave()
     MXS_INFO("Stopping slave");
 
     mxb_assert(m_writer);
-    // The current GTID position must be stored so that subsequent START SLAVE commands know to resume
-    // replication from the correct position.
-    set_gtid(m_writer->get_gtid_io_pos());
 
     m_writer.reset();
     m_master_config.slave_running = false;
@@ -436,48 +557,82 @@ void Pinloki::reset_slave()
     m_master_config = MasterConfig();
 }
 
-GWBUF* Pinloki::show_slave_status() const
+GWBUF* Pinloki::show_slave_status(bool all) const
 {
     std::lock_guard<std::mutex> guard(m_lock);
 
     const auto& files = m_inventory.file_names();
-    auto file_and_pos = get_file_name_and_size(files.empty() ? "" : files.back());
+    auto file_and_pos = get_file_name_and_size(last_string(files));
 
     auto rset = ResultSet::create({});
     rset->add_row({});
 
-    rset->add_column("Slave_IO_State", m_writer ? "Waiting for master to send event" : "");
+    auto error = m_writer ? m_writer->get_err() : Error {};
+
+    enum class State {Stopped, Connected, Error};
+
+    State state = State::Error;
+    if (m_inventory.is_writer_connected())
+    {
+        state = State::Connected;
+    }
+    else if (error.code == 0)
+    {
+        state = State::Stopped;
+    }
+
+    std::string sql_state =
+        state == State::Stopped ? "" :
+        "Slave has read all relay log; waiting for the slave I/O thread to update it";
+
+    std::string sql_io_state =
+        state == State::Stopped ? "" :
+        state == State::Connected ? "Waiting for master to send event" :
+        "Reconnecting after a failed master event read";
+
+    if (all)
+    {
+        rset->add_column("Connection_name", "");
+        rset->add_column("Slave_SQL_State", sql_state);
+    }
+    rset->add_column("Slave_IO_State", sql_io_state);
     rset->add_column("Master_Host", m_master_config.host);
     rset->add_column("Master_User", m_master_config.user);
     rset->add_column("Master_Port", std::to_string(m_master_config.port));
     rset->add_column("Connect_Retry", "1");
     rset->add_column("Master_Log_File", file_and_pos.first.c_str());
     rset->add_column("Read_Master_Log_Pos", file_and_pos.second.c_str());
-    rset->add_column("Relay_Log_File", "mysqld-relay-bin.000001");
-    rset->add_column("Relay_Log_Pos", "4");
-    rset->add_column("Relay_Master_Log_File", "binlog.000001");
-    rset->add_column("Slave_IO_Running", m_writer ? "Yes" : "No");
-    rset->add_column("Slave_SQL_Running", m_writer ? "Yes" : "No");
+    rset->add_column("Relay_Log_File", "");
+    rset->add_column("Relay_Log_Pos", "");
+    rset->add_column("Relay_Master_Log_File", "");
+    rset->add_column("Slave_IO_Running",
+                     state == State::Stopped ? "No" :
+                     state == State::Connected ? "Yes" :
+                     "Connecting");
+    rset->add_column("Slave_SQL_Running",
+                     state == State::Stopped ? "No" : "Yes");
     rset->add_column("Replicate_Do_DB", "");
     rset->add_column("Replicate_Ignore_DB", "");
     rset->add_column("Replicate_Do_Table", "");
     rset->add_column("Replicate_Ignore_Table", "");
     rset->add_column("Replicate_Wild_Do_Table", "");
     rset->add_column("Replicate_Wild_Ignore_Table", "");
-    rset->add_column("Last_Errno", "0");
-    rset->add_column("Last_Error", "");
+    rset->add_column("Last_Errno", std::to_string(error.code));
+    rset->add_column("Last_Error", error.str);
     rset->add_column("Skip_Counter", "0");
     rset->add_column("Exec_Master_Log_Pos", file_and_pos.second.c_str());
     rset->add_column("Relay_Log_Space", "0");
     rset->add_column("Until_Condition", "None");
     rset->add_column("Until_Log_File", "");
     rset->add_column("Until_Log_Pos", "0");
-    rset->add_column("Master_SSL_Allowed", "No");
+    rset->add_column("Master_SSL_Allowed", "No");   // TODO
     rset->add_column("Master_SSL_CA_File", "");
     rset->add_column("Master_SSL_CA_Path", "");
     rset->add_column("Master_SSL_Cert", "");
     rset->add_column("Master_SSL_Cipher", "");
     rset->add_column("Master_SSL_Key", "");
+    // Should set Seconds_Behind_Master to null if state != State::Connected,
+    // but that is not (yet) supported by ResultSet.
     rset->add_column("Seconds_Behind_Master", "0");
     rset->add_column("Master_SSL_Verify_Server_Cert", "No");
     rset->add_column("Last_IO_Errno", "0");
@@ -485,7 +640,7 @@ GWBUF* Pinloki::show_slave_status() const
     rset->add_column("Last_SQL_Errno", "0");
     rset->add_column("Last_SQL_Error", "");
     rset->add_column("Replicate_Ignore_Server_Ids", "");
-    rset->add_column("Master_Server_Id", "1");
+    rset->add_column("Master_Server_Id", std::to_string(m_inventory.master_id()));
     rset->add_column("Master_SSL_Crl", "");
     rset->add_column("Master_SSL_Crlpath", "");
     rset->add_column("Using_Gtid", "Slave_Pos");
@@ -495,24 +650,43 @@ GWBUF* Pinloki::show_slave_status() const
     rset->add_column("Parallel_Mode", "conservative");
     rset->add_column("SQL_Delay", "0");
     rset->add_column("SQL_Remaining_Delay", "NULL");
-    rset->add_column("Slave_SQL_Running_State",
-                     "Slave has read all relay log; waiting for the slave I/O thread to update it");
+    rset->add_column("Slave_SQL_Running_State", sql_state);
     rset->add_column("Slave_DDL_Groups", "0");
     rset->add_column("Slave_Non_Transactional_Groups", "0");
     rset->add_column("Slave_Transactional_Groups", "0");
 
+    if (all)
+    {
+        rset->add_column("Retried_transactions", "0");
+        rset->add_column("Max_relay_log_size", "1073741824");   // master decides
+        rset->add_column("Executed_log_entries", "42");
+        rset->add_column("Slave_received_heartbeats", "42");
+        rset->add_column("Slave_heartbeat_period", "1");
+        rset->add_column("Gtid_Slave_Pos", gtid_io_pos().to_string());
+    }
+
+
     return rset->as_buffer().release();
 }
 
-void Pinloki::set_gtid(const mxq::GtidList& gtid)
+void Pinloki::set_gtid_slave_pos(const maxsql::GtidList& gtid)
 {
-    m_config.set_boot_strap_gtid_list(gtid.to_string());
+    mxb_assert(m_writer.get() == nullptr);
+    if (m_inventory.rpl_state().is_included(gtid))
+    {
+        MXB_SERROR("The requested gtid "
+                   << gtid
+                   << " is already in the logs. Time travel is not supported.");
+    }
+    else
+    {
+        m_inventory.save_requested_rpl_state(gtid);
+    }
 }
 
 mxq::GtidList Pinloki::gtid_io_pos() const
 {
-    return m_writer ? m_writer->get_gtid_io_pos() :
-           mxq::GtidList::from_string(m_config.boot_strap_gtid_list());
+    return m_inventory.rpl_state();
 }
 
 void Pinloki::MasterConfig::save(const Config& config) const
@@ -596,7 +770,7 @@ bool Pinloki::MasterConfig::load(const Config& config)
     return rval;
 }
 
-PurgeResult purge_binlogs(Inventory* pInventory, const std::string& up_to)
+PurgeResult purge_binlogs(InventoryWriter* pInventory, const std::string& up_to)
 {
     auto files = pInventory->file_names();
     auto up_to_ite = std::find(files.begin(), files.end(), pInventory->config().path(up_to));
@@ -620,7 +794,7 @@ PurgeResult purge_binlogs(Inventory* pInventory, const std::string& up_to)
                 return PurgeResult::PartialPurge;
             }
 
-            pInventory->remove(*ite);
+            pInventory->pop_front(*ite);
             remove(ite->c_str());
         }
     }
@@ -637,8 +811,8 @@ bool Pinloki::purge_old_binlogs(mxb::Worker::Call::action_t action)
 
     auto now = wall_time::Clock::now();
     auto purge_before = now - config().expire_log_duration();
-    auto file_names = m_inventory.file_names();
-    auto files_to_keep = std::max(1, config().expire_log_minimum_files());     // at least one
+    const auto& file_names = m_inventory.file_names();
+    auto files_to_keep = std::max(1, config().expire_log_minimum_files());      // at least one
     int max_files_to_purge = file_names.size() - files_to_keep;
 
     int purge_index = -1;

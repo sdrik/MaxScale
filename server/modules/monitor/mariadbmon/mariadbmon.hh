@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -153,7 +153,7 @@ public:
      * @param output Output
      * @return True if results of a manual command were available.
      */
-    bool fetch_async_results(json_t** output);
+    bool fetch_cmd_result(json_t** output);
 
 protected:
     bool can_be_disabled(const mxs::MonitorServer& server, std::string* errmsg_out) const override;

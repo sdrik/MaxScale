@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -3248,6 +3248,7 @@ public:
         if (should_collect(QC_COLLECT_DATABASES))
         {
             char* zCopy = MXS_STRNDUP_A(pToken->z, pToken->n);
+            exposed_sqlite3Dequote(zCopy);
 
             m_database_names.push_back(zCopy);
         }

@@ -50,8 +50,8 @@ the various server-level ssl-settings.
 
 To properly fetch user account information, the MaxScale service user must be
 able to read from various tables in the  *mysql*-database: *user*, *db*,
-*tables_priv*, *columns_priv*, *proxies_priv* and *roles_mapping*. The user
-should also have the *SHOW DATABASES*-grant.
+*tables_priv*, *columns_priv*, *procs_priv*, *proxies_priv* and *roles_mapping*.
+The user should also have the *SHOW DATABASES*-grant.
 
 ```
 CREATE USER 'maxscale'@'maxscalehost' IDENTIFIED BY 'maxscale-password';
@@ -59,6 +59,7 @@ GRANT SELECT ON mysql.user TO 'maxscale'@'maxscalehost';
 GRANT SELECT ON mysql.db TO 'maxscale'@'maxscalehost';
 GRANT SELECT ON mysql.tables_priv TO 'maxscale'@'maxscalehost';
 GRANT SELECT ON mysql.columns_priv TO 'maxscale'@'maxscalehost';
+GRANT SELECT ON mysql.procs_priv TO 'maxscale'@'maxscalehost';
 GRANT SELECT ON mysql.proxies_priv TO 'maxscale'@'maxscalehost';
 GRANT SELECT ON mysql.roles_mapping TO 'maxscale'@'maxscalehost';
 GRANT SHOW DATABASES ON *.* TO 'maxscale'@'maxscalehost';
@@ -99,9 +100,18 @@ See
 [MaxScale Troubleshooting](https://mariadb.com/kb/en/mariadb-enterprise/maxscale-troubleshooting/)
 for additional information on how to solve authentication issues.
 
-MaxScale does not support grants to a database whose name contains wildcards,
-e.g. using `grant select on test_.* to 'alice'@'%';` to give access to *test1*
-and *test2*.
+### Wildcard database grants
+
+MaxScale does not support wildcard grants to databases. Although on MariaDB
+Server `grant select on test_.* to 'alice'@'%';` gives access to *test_* as well
+as *test1*, *test2* ..., MaxScale only recognizes the grant to *test_*. If the
+grant-command escapes the wildcard (``grant select on `test\_`.* to
+'alice'@'%';``) both MaxScale and the MariaDB Server interpret it as only
+allowing access to *test_*.
+
+On the MaxScale side, this is performed by simply removing the escape character
+`\` from the database name, controlled by the setting
+[strip_db_esc](../Getting-Started/Configuration-Guide.mcd#strip_db_esc).
 
 ## Authenticator options
 

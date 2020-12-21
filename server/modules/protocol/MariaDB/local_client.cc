@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -83,12 +83,21 @@ int32_t LocalClient::clientReply(GWBUF* buffer, mxs::ReplyRoute& down, const mxs
 
 bool do_self_destruct(mxs::RoutingWorker::Call::action_t action, LocalClient* data)
 {
-    delete data;
+    if (action == mxb::Worker::Call::EXECUTE)
+    {
+        delete data;
+    }
+
     return false;
 }
 
 bool LocalClient::handleError(mxs::ErrorType type, GWBUF* error, mxs::Endpoint* down, const mxs::Reply& reply)
 {
+    if (m_down->is_open())
+    {
+        m_down->close();
+    }
+
     if (m_self_destruct)
     {
         // Queue the self-desctruction so that the object remains valid after the handleError call

@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -355,6 +355,15 @@ int32_t InsertStreamSession::clientReply(GWBUF* buffer, const mxs::ReplyRoute& d
     {
         gwbuf_free(buffer);
         mxb_assert(!m_queue.empty());
+
+        if (m_state == DS_CLOSING_STREAM
+            && qc_query_is_type(qc_get_type_mask(m_queue.get()), QUERY_TYPE_COMMIT))
+        {
+            // TODO: This must be done as the LOAD DATA LOCAL INFILE disables the client-side tracking of the
+            // transaction state. The LOAD DATA LOCAL INFILE tracking would have to be done independently by
+            // all components in the routing chain to make it work correctly.
+            m_pSession->set_trx_state(SESSION_TRX_INACTIVE);
+        }
 
         m_state = m_state == DS_CLOSING_STREAM ? DS_STREAM_CLOSED : DS_REQUEST_ACCEPTED;
 

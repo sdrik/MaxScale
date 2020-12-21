@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -85,7 +85,8 @@ CacheMT* CacheMT::create(const std::string& name,
                                    pConfig->soft_ttl.count(),
                                    pConfig->max_count,
                                    pConfig->max_size,
-                                   pConfig->invalidate);
+                                   pConfig->invalidate,
+                                   pConfig->timeout);
 
     const auto& storage_arguments = pConfig->storage_options;
 

@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -14,7 +14,6 @@
 #pragma once
 
 #include "dbconnection.hh"
-#include <maxbase/exception.hh>
 #include "inventory.hh"
 #include "gtid.hh"
 #include "rpl_event.hh"
@@ -24,7 +23,6 @@
 
 namespace pinloki
 {
-DEFINE_EXCEPTION(BinlogWriteError);
 
 class Writer;
 
@@ -35,7 +33,7 @@ class Writer;
 class FileWriter
 {
 public:
-    FileWriter(Inventory* inv, const Writer& writer);
+    FileWriter(InventoryWriter* inv, const Writer& writer);
 
     void begin_txn();
     void add_event(maxsql::RplEvent& rpl_event);
@@ -56,12 +54,12 @@ private:
     void write_rotate(WritePosition& fn, const std::string& to_file_name);
     void write_gtid_list(WritePosition& fn);
 
-    bool           m_newborn = true;
-    bool           m_ignore_preamble = false;
-    Inventory&     m_inventory;
-    const Writer&  m_writer;
-    WritePosition  m_current_pos;
-    maxsql::Rotate m_rotate;
+    bool             m_newborn = true;
+    bool             m_ignore_preamble = false;
+    InventoryWriter& m_inventory;
+    const Writer&    m_writer;
+    WritePosition    m_current_pos;
+    maxsql::Rotate   m_rotate;
 
     bool               m_in_transaction = false;
     std::ostringstream m_tx_buffer;

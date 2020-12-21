@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -34,9 +34,9 @@ pinloki::Config& config()
     return cfg;
 }
 
-pinloki::Inventory& inventory()
+pinloki::InventoryWriter& write_inventory()
 {
-    static pinloki::Inventory inv(config());
+    static pinloki::InventoryWriter inv(config());
     return inv;
 }
 
@@ -45,8 +45,10 @@ bool test_it(int argc, char* argv[])
 {
     return false;
 
+    pinloki::InventoryReader inv(config());
+
     auto gtid = maxsql::Gtid::from_string("0-0-9");
-    pinloki::GtidPosition pos = pinloki::find_gtid_position(gtid, &inventory());
+    pinloki::GtidPosition pos = pinloki::find_gtid_position(gtid, inv);
 
     std::cout << "pos.file_name = " << pos.file_name << "\n";
     std::cout << "pos.pos = " << pos.file_pos << "\n";
@@ -76,7 +78,7 @@ void prog_main(const maxsql::GtidList& gtid_list, const std::string& host,
     {
         pinloki::Writer writer([&]() {
                                    return details;
-                               }, &worker, &inventory());
+                               }, &worker, &write_inventory());
         worker.start();
         worker.join();
     }
@@ -85,7 +87,7 @@ void prog_main(const maxsql::GtidList& gtid_list, const std::string& host,
         pinloki::Reader reader([](const auto& event) {
                                    std::cout << event << std::endl;
                                    return true;
-                               }, &inventory(), &worker, gtid, 30s);
+                               }, config(), &worker, gtid, 30s);
         worker.start();
         worker.join();
     }
@@ -206,15 +208,6 @@ try
         std::ofstream ofs(config().gtid_file_path());
         ofs << override_gtid_list;
     }
-
-    // This is for the writer, normally done in pinloki.cc
-    if (auto ifs = std::ifstream(config().gtid_file_path()))
-    {
-        std::string gtid_list_str;
-        ifs >> gtid_list_str;
-        config().set_boot_strap_gtid_list(gtid_list_str);
-    }
-
 
     prog_main(override_gtid_list, host + ":" + std::to_string(port), user, pw);
 }

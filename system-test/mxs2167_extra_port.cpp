@@ -96,10 +96,18 @@ int main(int argc, char** argv)
                 while (conn_count < max_conns_limit)
                 {
                     auto conn = open_conn_db_timeout(normal_port, host, "", user, pw, 4, false);
-                    if (conn && execute_query_silent(conn, "SELECT 1") == 0)
+                    if (conn)
                     {
-                        connections.push_back(conn);
-                        conn_count++;
+                        if (execute_query_silent(conn, "SELECT 1") == 0)
+                        {
+                            connections.push_back(conn);
+                            conn_count++;
+                        }
+                        else
+                        {
+                            mysql_close(conn);
+                            break;
+                        }
                     }
                     else
                     {
@@ -170,6 +178,11 @@ int main(int argc, char** argv)
                     {
                         test.expect(false, "Routing sessions should not work.");
                     }
+
+                    if (conn)
+                    {
+                        mysql_close(conn);
+                    }
                 }
             }
 
@@ -180,6 +193,18 @@ int main(int argc, char** argv)
                 mysql_close(conn);
             }
         }
+    }
+
+    // Change server configuration such that the primary port is wrong. Monitoring should still work.
+    if (test.ok())
+    {
+        string srv_name = "server1";
+        test.maxctrl("alter server " + srv_name + " port 12345");
+        test.maxscales->wait_for_monitor(2);
+        auto status = test.maxscales->get_server_status(srv_name);
+        test.expect(status.count("Running") == 1, "Monitoring of %s through extra-port failed when normal "
+                                                  "port disabled", srv_name.c_str());
+        test.maxctrl("alter server " + srv_name + " port " + std::to_string(test.repl->port[0]));
     }
 
     // Remove extra_port

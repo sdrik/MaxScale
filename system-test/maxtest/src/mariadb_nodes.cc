@@ -103,6 +103,8 @@ Mariadb_nodes::~Mariadb_nodes()
             unblock_node(i);
         }
     }
+
+    close_connections();
 }
 
 int Mariadb_nodes::connect(int i, const std::string& db)
@@ -198,17 +200,17 @@ void Mariadb_nodes::read_env()
             //reading sockets
             sprintf(env_name, "%s_%03d_socket", prefixc, i);
             socket[i] = readenv(env_name, " ");
-            if (strcmp(socket[i], " "))
+            if (strcmp(socket[i].c_str(), " "))
             {
-                socket_cmd[i] = (char *) malloc(strlen(socket[i]) + 10);
-                sprintf(socket_cmd[i], "--socket=%s", socket[i]);
+                socket_cmd[i] = "--socket=";
+                socket_cmd[i] += socket[i];
             }
             else
             {
                 socket_cmd[i] = (char *) " ";
             }
             sprintf(env_name, "%s_%03d_socket_cmd", prefixc, i);
-            setenv(env_name, socket_cmd[i], 1);
+            setenv(env_name, socket_cmd[i].c_str(), 1);
 
             // reading start_db_command
             sprintf(env_name, "%s_%03d_start_db_command", prefixc, i);
@@ -233,8 +235,8 @@ void Mariadb_nodes::print_env()
         printf("%s node %d \t%s\tPort=%d\n", prefixc, i, ip4(i), port[i]);
         printf("%s Access user %s\n", prefixc, access_user(i));
     }
-    printf("%s User name %s\n", prefixc, user_name);
-    printf("%s Password %s\n", prefixc, password);
+    printf("%s User name %s\n", prefixc, user_name.c_str());
+    printf("%s Password %s\n", prefixc, password.c_str());
 }
 
 int Mariadb_nodes::find_master()
@@ -317,11 +319,11 @@ int Mariadb_nodes::start_node(int node, const char* param)
     char cmd[PATH_MAX + 1024];
     if (v51)
     {
-        sprintf(cmd, "%s %s --report-host", start_db_command[node], param);
+        sprintf(cmd, "%s %s --report-host", start_db_command[node].c_str(), param);
     }
     else
     {
-        sprintf(cmd, "%s %s", start_db_command[node], param);
+        sprintf(cmd, "%s %s", start_db_command[node].c_str(), param);
     }
     return ssh_node(node, cmd, true);
 }
@@ -389,9 +391,17 @@ void Mariadb_nodes::create_users(int node)
     // Create users for replication as well as the users that are used by the tests
     sprintf(str, "%s/create_user.sh", test_dir);
     copy_to_node(node, str, access_homedir(node));
+
     ssh_node_f(node, true,
-               "export node_user=\"%s\"; export node_password=\"%s\"; %s/create_user.sh %s",
-               user_name, password, access_homedir(0), socket_cmd[0]);
+               "export require_ssl=\"%s\"; "
+               "export node_user=\"%s\"; "
+               "export node_password=\"%s\"; "
+               "%s/create_user.sh %s",
+               ssl ? "REQUIRE SSL" : "",
+               user_name.c_str(),
+               password.c_str(),
+               access_homedir(0),
+               socket_cmd[0].c_str());
 }
 
 int Mariadb_nodes::create_users()
@@ -483,6 +493,7 @@ int Galera_nodes::start_galera()
         ssh_node(i, "echo [mysqld] > cluster_address.cnf", true);
         ssh_node_f(i, true, "echo wsrep_cluster_address=gcomm://%s >>  cluster_address.cnf", gcomm.c_str());
         ssh_node(i, "cp cluster_address.cnf /etc/my.cnf.d/", true);
+        ssh_node(i, "cp cluster_address.cnf /etc/mysql/my.cnf.d/", true);
 
         ssh_node(i, "rm -rf /var/lib/mysql/*", true);
         ssh_node(i, "mysql_install_db --user=mysql", true);
@@ -519,9 +530,9 @@ int Galera_nodes::start_galera()
     ssh_node_f(0,
                true,
                "export galera_user=\"%s\"; export galera_password=\"%s\"; ./create_user_galera.sh %s",
-               user_name,
-               password,
-               socket_cmd[0]);
+               user_name.c_str(),
+               password.c_str(),
+               socket_cmd[0].c_str());
 
     local_result += robust_connect(5) ? 0 : 1;
     local_result += execute_query(nodes[0], "%s", create_repl_user);
@@ -795,6 +806,8 @@ static bool multi_source_replication(MYSQL* conn, int node)
             printf("Node %d: More than one configured slave\n", node);
             fflush(stdout);
         }
+
+        mysql_free_result(res);
     }
     else
     {
@@ -832,6 +845,11 @@ int Mariadb_nodes::check_replication()
 
     for (int i = 0; i < N && res == 0; i++)
     {
+        if (ssl && !check_ssl(i))
+        {
+            res = 1;
+        }
+
         if (mysql_query(nodes[i], "SELECT COUNT(*) FROM mysql.user") == 0)
         {
             mysql_free_result(mysql_store_result(nodes[i]));
@@ -1258,67 +1276,6 @@ int Mariadb_nodes::truncate_mariadb_logs()
     return std::count_if(results.begin(), results.end(), std::mem_fn(&std::future<int>::get));
 }
 
-int Mariadb_nodes::configure_ssl(bool require)
-{
-    int local_result = 0;
-    char str[PATH_MAX + 256];
-
-    this->ssl = 1;
-
-    for (int i = 0; i < N; i++)
-    {
-        printf("Node %d\n", i);
-        stop_node(i);
-        sprintf(str, "%s/ssl-cert", test_dir);
-        local_result += copy_to_node_legacy(str, (char*) "~/", i);
-        sprintf(str, "%s/ssl.cnf", test_dir);
-        local_result += copy_to_node_legacy(str, (char*) "~/", i);
-        sprintf(str, "cp %s/ssl.cnf /etc/my.cnf.d/", access_homedir(i));
-        local_result += ssh_node(i, str, true);
-
-        sprintf(str, "cp -r %s/ssl-cert /etc/", access_homedir(i));
-        local_result += ssh_node(i, str, true);
-        local_result += ssh_node(i, (char*) "chown mysql:mysql -R /etc/ssl-cert", true);
-        start_node(i, (char*) "");
-    }
-
-    if (require)
-    {
-        // Create DB user on first node
-        printf("Set user to require ssl: %s\n", str);
-        sprintf(str, "%s/create_user_ssl.sh", test_dir);
-        copy_to_node_legacy(str, (char*) "~/", 0);
-
-        sprintf(str,
-                "export node_user=\"%s\"; export node_password=\"%s\"; ./create_user_ssl.sh %s",
-                user_name,
-                password,
-                socket_cmd[0]);
-        printf("cmd: %s\n", str);
-        ssh_node(0, str, false);
-    }
-
-    return local_result;
-}
-
-int Mariadb_nodes::disable_ssl()
-{
-    int local_result = connect();
-    local_result += execute_query(
-        nodes[0], "DROP USER %s;  grant all privileges on *.*  to '%s'@'%%' identified by '%s';",
-        user_name, user_name, password);
-    close_connections();
-
-    for (int i = 0; i < N; i++)
-    {
-        stop_node(i);
-        local_result += ssh_node(i, (char*) "rm -f /etc/my.cnf.d/ssl.cnf", true);
-        start_node(i, (char*) "");
-    }
-
-    return local_result;
-}
-
 static void wait_until_pos(MYSQL* mysql, int filenum, int pos)
 {
     int slave_filenum = 0;
@@ -1466,6 +1423,16 @@ void Mariadb_nodes::reset_server_settings(int node)
     ssh_node(node, "rm -rf /etc/my.cnf.d/*", true);
     copy_to_node(node, (cnfdir + cnf).c_str(), "~/");
     ssh_node_f(node, false, "sudo install -o root -g root -m 0644 ~/%s /etc/my.cnf.d/", cnf.c_str());
+
+    // Always configure the backend for SSL
+    std::string ssl_dir = std::string(test_dir) + "/ssl-cert";
+    std::string ssl_cnf = std::string(test_dir) + "/ssl.cnf";
+    copy_to_node_legacy(ssl_dir.c_str(), "~/", node);
+    copy_to_node_legacy(ssl_cnf.c_str(), "~/", node);
+
+    ssh_node_f(node, true, "cp %s/ssl.cnf /etc/my.cnf.d/", access_homedir(node));
+    ssh_node_f(node, true, "cp -r %s/ssl-cert /etc/", access_homedir(node));
+    ssh_node_f(node, true, "chown mysql:mysql -R /etc/ssl-cert");
 }
 
 void Mariadb_nodes::reset_server_settings()
@@ -1549,6 +1516,9 @@ int Mariadb_nodes::prepare_server(int i)
             ssh_node(i, "mysql_install_db; sudo chown -R mysql:mysql /var/lib/mysql", true);
         }
     }
+
+    stop_node(i);
+    start_node(i, "");
 
     return rval;
 }
@@ -1672,4 +1642,64 @@ const string& Mariadb_nodes::prefix() const
 const char* Mariadb_nodes::ip4(int i) const
 {
     return Nodes::ip4(i);
+}
+
+void Mariadb_nodes::disable_ssl()
+{
+    for (int i = 0; i < N; i++)
+    {
+        stop_node(i);
+        ssh_node(i, "rm -f /etc/my.cnf.d/ssl.cnf", true);
+        start_node(i);
+    }
+}
+
+bool Mariadb_nodes::check_ssl(int node)
+{
+    bool ok = true;
+    auto conn = get_connection(node);
+    conn.ssl(true);
+
+    if (!conn.connect())
+    {
+        printf("Failed to connect to database with SSL enabled: %s\n", conn.error());
+        ok = false;
+
+        conn.ssl(false);
+        printf("Attempting to connect without SSL...\n");
+
+        if (conn.connect())
+        {
+            printf("Connection was successful, server is not configured with SSL.\n");
+        }
+        else
+        {
+            printf("Failed to connect to database with SSL disabled: %s\n", conn.error());
+        }
+    }
+    else
+    {
+        auto version = conn.field("select variable_value from information_schema.session_status "
+                                  "where variable_name like 'ssl_version'");
+
+        if (version.empty())
+        {
+            printf("Failed to establish SSL connection to database\n");
+            ok = false;
+        }
+        else
+        {
+            printf("SSL version: %s\n", version.c_str());
+        }
+
+        conn.ssl(false);
+
+        if (conn.connect())
+        {
+            printf("Connection was successful, server does not require SSL.\n");
+            ok = false;
+        }
+    }
+
+    return ok;
 }

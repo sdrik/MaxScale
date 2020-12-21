@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -54,30 +54,31 @@ public:
     uint64_t        getCapabilities();
     bool            configure(mxs::ConfigParameters* pParams);
 
-    const Config& config() const;
-    Inventory*    inventory();
+    const Config&    config() const;
+    InventoryWriter* inventory();
 
-    void          change_master(const parser::ChangeMasterValues& values);
+    std::string   change_master(const parser::ChangeMasterValues& values);
     bool          is_slave_running() const;
-    bool          start_slave();
+    std::string   start_slave();
     void          stop_slave();
     void          reset_slave();
-    GWBUF*        show_slave_status() const;
+    GWBUF*        show_slave_status(bool all) const;
     mxq::GtidList gtid_io_pos() const;
-    void          set_gtid(const mxq::GtidList& gtid);
+    void          set_gtid_slave_pos(const maxsql::GtidList& gtid);
 
 private:
     Pinloki(SERVICE* pService, Config&& config);
 
     maxsql::Connection::ConnectionDetails generate_details();
 
-    bool purge_old_binlogs(maxbase::Worker::Call::action_t action);
+    bool        purge_old_binlogs(maxbase::Worker::Call::action_t action);
+    std::string verify_master_settings();
 
     struct MasterConfig
     {
         bool        slave_running = false;
         std::string host;
-        int64_t     port = 0;
+        int64_t     port = 3306;
         std::string user;
         std::string password;
         bool        use_gtid = false;
@@ -97,7 +98,7 @@ private:
     };
 
     Config                  m_config;
-    Inventory               m_inventory;
+    InventoryWriter         m_inventory;
     std::unique_ptr<Writer> m_writer;
     MasterConfig            m_master_config;
     mutable std::mutex      m_lock;
@@ -113,5 +114,5 @@ std::pair<std::string, std::string> get_file_name_and_size(const std::string& fi
  */
 enum class PurgeResult {Ok, UpToFileNotFound, PartialPurge};
 
-PurgeResult purge_binlogs(Inventory* pInventory, const std::string& up_to);
+PurgeResult purge_binlogs(InventoryWriter* pInventory, const std::string& up_to);
 }

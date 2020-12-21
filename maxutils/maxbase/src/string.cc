@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -160,5 +160,22 @@ std::string tolower(const std::string& str)
     rval.resize(str.length());
     std::transform(str.begin(), str.end(), rval.begin(), ::tolower);
     return rval;
+}
+
+void strip_escape_chars(string& val)
+{
+    if (val.length() > 1)
+    {
+        size_t pos = 0;
+        while (pos < val.length())
+        {
+            if (val[pos] == '\\')
+            {
+                /* Advance after erasing a character, so that \\ -> \ */
+                val.erase(pos, 1);
+            }
+            pos++;
+        }
+    }
 }
 }

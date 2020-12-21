@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -1460,6 +1460,7 @@ int main(int argc, char* argv[])
     string classifier2Args("log_unrecognized_statements=1");
     version = 10 * 1000 * 2 * 100;
 #endif
+    string statement;
     const char* zStatement = NULL;
     qc_sql_mode_t sql_mode = QC_SQL_MODE_DEFAULT;
     bool solo = false;
@@ -1511,7 +1512,34 @@ int main(int argc, char* argv[])
             break;
 
         case 's':
-            zStatement = optarg;
+            {
+                const char* z = optarg;
+
+                while (*z)
+                {
+                    switch (*z)
+                    {
+                    case '\\':
+                        if (*(z + 1) == 'n')
+                        {
+                            statement += '\n';
+                            ++z;
+                        }
+                        else
+                        {
+                            statement += *z;
+                        }
+                        break;
+
+                    default:
+                        statement += *z;
+                    }
+
+                    ++z;
+                }
+
+                zStatement = statement.c_str();
+            }
             break;
 
         case 'm':

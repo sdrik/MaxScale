@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -107,6 +107,9 @@ void MXS_SESSION::kill(GWBUF* error)
         mxb_assert(!client_connection()->dcb()->is_closed());
         m_killed = true;
         close_reason = SESSION_CLOSE_HANDLEERROR_FAILED;
+
+        // Call the protocol kill function before changing the session state
+        client_connection()->kill();
 
         if (m_state == State::STARTED)
         {
@@ -925,7 +928,7 @@ void Session::dump_statements() const
                     // We are in a context where we do not have a current session, so we need to
                     // log the session id ourselves.
 
-                    MXS_NOTICE("(%" PRIu64 ") Stmt %d(%s): %.*s", current_id, n, timestamp, len, pStmt);
+                    MXS_NOTICE("(%" PRIu64 ") Stmt %d(%s): %.*s", id(), n, timestamp, len, pStmt);
                 }
 
                 if (deallocate)
@@ -1453,7 +1456,7 @@ void Session::parse_and_set_trx_state(const mxs::Reply& reply)
 
     if (!trx_state.empty())
     {
-        if (trx_state.find_first_of("TI") == std::string::npos)
+        if (trx_state.find_first_of("TI") != std::string::npos)
         {
             set_trx_state(SESSION_TRX_ACTIVE);
         }

@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -12,6 +12,8 @@
  */
 
 #pragma once
+
+#include "gtid.hh"
 
 #include <maxscale/ccdefs.hh>
 
@@ -34,6 +36,8 @@ class Config : public mxs::config::Configuration
 public:
     Config(const std::string& name);
 
+    Config(Config&&) = default;
+
     static mxs::config::Specification& spec();
 
     /** Make a full path. This prefixes "name" with m_binlog_dir/,
@@ -44,19 +48,15 @@ public:
     std::string binlog_dir_path() const;
     std::string inventory_file_path() const;
     std::string gtid_file_path() const;
+    std::string requested_gtid_file_path() const;
     std::string master_info_file() const;
-    /**
-     * @brief boot_strap_gtid_list - a.k.a replication state
-     * @return
-     */
-    std::string boot_strap_gtid_list() const;
-    void        set_boot_strap_gtid_list(const std::string& gtid);
     uint32_t    server_id() const;
 
     // Network timeout
     std::chrono::seconds net_timeout() const;
     // Automatic master selection
     bool select_master() const;
+    void disable_select_master();
 
     // File purging
     int32_t             expire_log_minimum_files() const;
@@ -74,8 +74,6 @@ private:
     std::string m_binlog_inventory_file = "binlog.index";
     /* Hashing directory (properly indexing, but the word is already in use) */
     std::string m_binlog_hash_dir = ".hash";
-    /** Gtid used if there in no gtid yet */
-    std::string m_boot_strap_gtid_list = "";
     /** Where the current master details are stored */
     std::string m_master_ini_path;
     /** Server id reported to the Master */
@@ -131,6 +129,7 @@ private:
 
     std::chrono::seconds m_net_timeout;
     bool                 m_select_master;
+    bool                 m_select_master_disabled {false};
 
     int64_t             m_expire_log_minimum_files;
     wall_time::Duration m_expire_log_duration;

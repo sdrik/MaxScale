@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -202,7 +202,11 @@ void GaleraMonitor::update_server_status(MonitorServer* monitored_server)
 
     /* Check if the the Galera FSM shows this node is joined to the cluster */
     const char* cluster_member =
-        "SHOW STATUS WHERE Variable_name IN"
+        " SELECT LOWER(VARIABLE_NAME), VARIABLE_VALUE FROM ("
+        " SELECT * FROM information_schema.SESSION_STATUS"
+        " UNION"
+        " SELECT * FROM information_schema.SESSION_VARIABLES) AS t"
+        " WHERE Variable_name IN"
         " ('wsrep_cluster_state_uuid',"
         " 'wsrep_cluster_size',"
         " 'wsrep_local_index',"

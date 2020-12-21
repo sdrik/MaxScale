@@ -54,7 +54,7 @@ export mdbci_config_name=`echo ${mdbci_config_name} | sed "s/?//g"`
 export provider=`mdbci show provider $box --silent 2> /dev/null`
 export backend_box=${backend_box:-"centos_7_"$provider}
 
-mdbci destroy ${mdbci_config_name}
+mdbci destroy --force ${mdbci_config_name}
 
 . ${script_dir}/configure_log_dir.sh
 
@@ -66,6 +66,10 @@ mkdir build && cd build
 cmake .. -DBUILD_SYSTEM_TESTS=Y -DBUILDNAME=${mdbci_config_name} -DCMAKE_BUILD_TYPE=Debug
 cd system-test
 make
+if [ $? != 0 ] ; then
+    echo "Test code build FAILED! exiting"
+    exit 1
+fi
 
 echo ${test_set} | grep "NAME#"
 if [ $? == 0 ] ; then
@@ -104,7 +108,6 @@ else
     eval "arguments=(${test_set})"
     ctest -N "${arguments[@]}"
     ctest -VV "${arguments[@]}"
-    ctest --rerun-failed -VV
 fi
 
 if [[ "$name" =~ '-gcov' ]]
@@ -120,6 +123,6 @@ ${script_dir}/copy_logs.sh
 cd $dir
 
 if [ "${do_not_destroy_vm}" != "yes" ] ; then
-	mdbci destroy ${mdbci_config_name}
+	mdbci destroy --force ${mdbci_config_name}
 	echo "clean up done!"
 fi

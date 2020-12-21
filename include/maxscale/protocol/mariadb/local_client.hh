@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -46,6 +46,18 @@ public:
      * @return True on success, false on error
      */
     bool connect();
+
+    /**
+     * Check if the client is still open
+     *
+     * The client can close on its own due to backend errors.
+     *
+     * @return True if the client is still open and queries can be queued to it
+     */
+    bool is_open() const
+    {
+        return m_down->is_open();
+    }
 
     /**
      * Queue a new query for execution

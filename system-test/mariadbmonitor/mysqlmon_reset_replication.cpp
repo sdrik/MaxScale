@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -50,6 +50,7 @@ int main(int argc, char** argv)
     const char drop_query[] = "DROP TABLE test.t1;";
     const char strict_mode[] = "SET GLOBAL gtid_strict_mode=%i;";
 
+    const int N = 4;
     string server_names[] = {"server1", "server2", "server3", "server4"};
     string master = "Master";
     string slave = "Slave";
@@ -117,7 +118,7 @@ int main(int argc, char** argv)
         expect_server_status(server_names[3], slave);
         // Check that the values on the databases are identical by summing the values.
         int expected_sum = 55;      // 11 * 5
-        for (int i = 0; i < test.repl->N; i++)
+        for (int i = 0; i < N; i++)
         {
             int sum = read_sum(i);
             test.expect(sum == expected_sum,

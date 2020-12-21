@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -125,5 +125,21 @@ describe('SelectDialog.vue', () => {
         expect(multiple).to.be.equals(wrapperMultiple)
         expect(clearable).to.be.equals(wrapperClearable)
         expect(showPlaceHolder).to.be.false
+    })
+
+    it(`Should render accurate content when body-append slot is used`, async () => {
+        wrapper = mount({
+            shallow: false,
+            component: SelectDialog,
+            props: initialProps,
+            computed: {
+                computeShowDialog: () => true,
+            },
+            slots: {
+                'body-append': '<small class="body-append">body append</small>',
+            },
+        })
+
+        expect(wrapper.find('.body-append').text()).to.be.equal('body append')
     })
 })

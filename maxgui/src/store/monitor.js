@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -211,6 +211,41 @@ export default {
             } catch (e) {
                 const logger = this.vue.$logger('store-monitor-updateMonitorRelationship')
                 logger.error(e)
+            }
+        },
+
+        /**
+         * @param {String} payload.monitorModule Monitor module
+         * @param {String} payload.monitorId Monitor id
+         * @param {String} payload.master Name of the new master server
+         * @param {Function} payload.callback callback function after successfully updated
+         */
+        async switchOver(_, { monitorModule, monitorId, masterId, callback }) {
+            try {
+                let res
+                res = await this.vue.$axios.post(
+                    `/maxscale/modules/${monitorModule}/async-switchover?${monitorId}&${masterId}`
+                )
+                // response ok
+                if (res.status === 204) if (this.vue.$help.isFunction(callback)) await callback()
+            } catch (e) {
+                const logger = this.vue.$logger('store-monitor-switchOver')
+                logger.error(e)
+            }
+        },
+
+        /**
+         * @param {String} payload.monitorModule Monitor module
+         * @param {String} payload.monitorId Monitor id
+         * @return {Object} response object
+         */
+        async fetchAsyncResults(_, { monitorModule, monitorId }) {
+            try {
+                return await this.vue.$axios.get(
+                    `/maxscale/modules/${monitorModule}/fetch-cmd-results?${monitorId}`
+                )
+            } catch (e) {
+                this.vue.$logger('store-monitor-fetchAsyncResults').error(e)
             }
         },
     },

@@ -114,52 +114,6 @@ target_link_libraries(test_kafkacdc ${RDKAFKA_LIBRARIES})
 ############################################
 
 ############################################
-# BEGIN: Galera tests                      #
-############################################
-
-# Crash in case of backend node in Galera cluster stopping and then reconnect to Maxscale
-add_test_executable(bug676.cpp bug676 galera LABELS galeramon GALERA_BACKEND)
-
-# Galera node priority test
-add_test_executable(galera_priority.cpp galera_priority galera_priority LABELS galeramon LIGHT GALERA_BACKEND)
-
-# INSERT extremelly big number of rows
-add_test_executable(lots_of_rows.cpp lots_of_rows galera LABELS readwritesplit HEAVY GALERA_BACKEND)
-
-# Prepearing and execution statements in the loop
-add_test_executable(mxs244_prepared_stmt_loop.cpp mxs244_prepared_stmt_loop galera LABELS readwritesplit readconnroute LIGHT GALERA_BACKEND)
-
-# Playing with blocking and unblocking nodes under INSERT load
-add_test_executable(mxs564_big_dump.cpp mxs564_big_dump galera_mxs564 LABELS readwritesplit readconnroute GALERA_BACKEND)
-
-# MXS-1476: priority value ignored when a Galera node rejoins with a lower wsrep_local_index than current master
-# https://jira.mariadb.org/browse/MXS-1476
-add_test_executable(mxs1476.cpp mxs1476 mxs1476 LABELS galeramon GALERA_BACKEND)
-
-# MXS-1751: Maxscale crashes when certain config is in play (with nodes down)
-# https://jira.mariadb.org/browse/MXS-1751
-add_test_executable(mxs1751_available_when_donor_crash.cpp mxs1751_available_when_donor_crash mxs1751_available_when_donor_crash LABELS galeramon GALERA_BACKEND)
-
-# Persistant connection test
-add_test_executable(pers_01.cpp pers_01 pers_01 LABELS maxscale REPL_BACKEND readwritesplit GALERA_BACKEND)
-
-############################################
-# END: Galera tests                        #
-############################################
-
-############################################
-# BEGIN: ColumnStore tests                 #
-############################################
-
-# MXS-2146: Add test case for csmon
-# https://jira.mariadb.org/browse/MXS-2146
-add_test_executable(csmon_test.cpp csmon_test csmon_test LABELS csmon CS_BACKEND)
-
-############################################
-# END: ColumnStore tests                   #
-############################################
-
-############################################
 # BEGIN: Normal tests                      #
 ############################################
 
@@ -170,6 +124,7 @@ add_test_executable(csmon_test.cpp csmon_test csmon_test LABELS csmon CS_BACKEND
 # MXS-682
 # MXS-957
 # MXS-1786
+# MXS-3229
 add_test_executable(sanity_check.cpp sanity_check replication LABELS readwritesplit LIGHT REPL_BACKEND)
 
 # Repeatedly connect to maxscale while the backends reject all connections, expect no crash
@@ -178,7 +133,8 @@ add_test_executable(backend_auth_fail.cpp backend_auth_fail replication LABELS r
 # Regression case for the bug "MaxScale ignores host in user authentication"
 add_test_executable(auth_hostname.cpp auth_hostname replication LABELS MySQLAuth REPL_BACKEND)
 
-# Regression case for the bug "Wildcard in host column of mysql.user table don't work properly"
+# Test wildcard in user host name (user@127.%.%.%). Also test MXS-3172 escaped wildcard in database grant and
+# MXS-3323 non-escaped wildcard.
 add_test_executable(auth_wchost.cpp auth_wchost replication LABELS MySQLAuth LIGHT REPL_BACKEND)
 
 # Regression case for the bug "Routing Hints route to server sometimes doesn't work"
@@ -189,6 +145,9 @@ add_test_executable(rhint_crash.cpp rhint_crash hints LABELS readwritesplit hint
 
 # Regression case for the bug "The end comment tag in hints isn't properly detected"
 add_test_executable(rhint_comment.cpp rhint_comment hints LABELS readwritesplit hintfilter REPL_BACKEND)
+
+# MaxGUI test
+add_test_executable(test_maxgui.cc test_maxgui test_maxgui LABELS maxgui REPL_BACKEND)
 
 # Checks "SELECT * INTO OUTFILE" and "LOAD DATA LOCAL INFILE"
 add_test_executable(rwsplit_infile_outfile.cpp rwsplit_infile_outfile replication LABELS readwritesplit REPL_BACKEND)
@@ -336,9 +295,6 @@ add_test_derived(load_balancing_pers10 load_balancing load_pers10 LABELS readwri
 # Test with extremely big blob inserting
 add_test_executable(longblob.cpp longblob longblob LABELS readwritesplit readconnroute UNSTABLE HEAVY REPL_BACKEND)
 
-# Test with extremely big blob inserting/selecting with > 16 mb data blocks
-add_test_executable(mxs1110_16mb.cpp mxs1110_16mb longblob_filters LABELS readwritesplit readconnroute HEAVY REPL_BACKEND GALERA_BACKEND)
-
 # Schemarouter implicit database detection
 add_test_executable(mxs1310_implicit_db.cpp mxs1310_implicit_db mxs1310_implicit_db LABELS schemarouter REPL_BACKEND)
 
@@ -348,9 +304,6 @@ add_test_executable(mxs1323_stress.cpp mxs1323_stress mxs1323 LABELS readwritesp
 
 # A set of MariaDB server tests executed against Maxscale RWSplit
 add_test_script(mariadb_tests_hartmut.sh mariadb_tests_hartmut.sh replication LABELS readwritesplit REPL_BACKEND)
-
-# A set of MariaDB server tests executed against Maxscale RWSplit (Galera backend)
-add_test_script(mariadb_tests_hartmut_galera.sh mariadb_tests_hartmut.sh galera_hartmut LABELS readwritesplit GALERA_BACKEND)
 
 # Creates a number of connections > max_connections setting
 add_test_executable(max_connections.cpp max_connections replication LABELS MySQLAuth MySQLProtocol UNSTABLE HEAVY REPL_BACKEND)
@@ -383,14 +336,12 @@ add_test_executable(binary_ps_cursor.cpp binary_ps_cursor replication LABELS rea
 # Creates and closes a lot of connections, checks that 'list servers' shows 0 connections at the end
 add_test_executable(mxs321.cpp mxs321 replication LABELS maxscale readwritesplit REPL_BACKEND)
 
-# Crash with Galera and backend restart when persistant cfonnections are in use
-add_test_derived(mxs361 pers_02 mxs361 mxs361 LABELS maxscale REPL_BACKEND GALERA_BACKEND)
-
 # Load huge file with 'LOAD DATA LOCAL INFILE'
 add_test_executable(mxs365.cpp mxs365 replication LABELS readwritesplit REPL_BACKEND)
 
-# Connect to Maxscale with user with only 'SELECT' priveledge
-add_test_executable(mxs37_table_privilege.cpp mxs37_table_privilege replication LABELS MySQLAuth LIGHT REPL_BACKEND)
+# Test users with different level privileges: database, table, column and procedure.
+# MXS-37, MXS-3303
+add_test_executable(client_privileges.cc client_privileges replication LABELS LIGHT REPL_BACKEND)
 
 # Connect repeatedly to Schema router and execute simple query, check if auth is ok
 add_test_executable(mxs431.cpp mxs431 sharding LABELS schemarouter REPL_BACKEND BREAKS_REPL)
@@ -422,9 +373,6 @@ add_test_executable(mxs722.cpp mxs722 mxs722 LABELS maxscale LIGHT REPL_BACKEND)
 
 # Simple connect test in bash, checks that defined in cmd line DB is selected
 add_test_script(mxs791.sh mxs791.sh replication LABELS UNSTABLE HEAVY REPL_BACKEND)
-
-# Simple connect test in bash, checks that defined in cmd line DB is selected (Galera backend)
-add_test_script(mxs791_galera.sh mxs791.sh galera LABELS UNSTABLE HEAVY GALERA_BACKEND)
 
 # Checks "Current no. of conns" output after long blob inserting
 add_test_executable(mxs812_1.cpp mxs812_1 longblob LABELS readwritesplit REPL_BACKEND)
@@ -499,11 +447,17 @@ add_test_executable(cache_invalidate.cpp cache_invalidate cache_invalidate LABEL
 # Test of Cache filter - users
 add_test_executable(cache_users.cpp cache_users cache_users LABELS cachefilter REPL_BACKEND)
 
+# Test of Cache filter - distributed storages, transparently taken in and out of use
+add_test_executable(cache_distributed.cpp cache_distributed cache_distributed LABELS cachefilter REPL_BACKEND)
+
 # Set utf8mb4 in the backend and restart Maxscale
 add_test_executable(mxs951_utfmb4.cpp mxs951_utfmb4 replication LABELS REPL_BACKEND)
 
 # Proxy protocol test
 add_test_executable(proxy_protocol.cpp proxy_protocol proxy_protocol LABELS MySQLAuth MySQLProtocol REPL_BACKEND)
+
+# MXS-3342: Crash with proxy protocol and persistent connections
+add_test_executable(mxs3342_proxy_protocol_pool.cc mxs3342_proxy_protocol_pool mxs3342_proxy_protocol_pool LABELS REPL_BACKEND)
 
 # Regression case for the bug "Defunct processes after maxscale have executed script during failover"
 add_test_executable(mxs1045.cpp mxs1045 mxs1045 LABELS maxscale REPL_BACKEND)
@@ -555,10 +509,6 @@ add_test_executable(mxs1516.cpp mxs1516 replication LABELS readconnroute REPL_BA
 # MXS-1549: Optimistic transaction tests
 # https://jira.mariadb.org/browse/MXS-1549
 add_test_executable(mxs1549_optimistic_trx.cpp mxs1549_optimistic_trx mxs1549_optimistic_trx LABELS readwritesplit REPL_BACKEND)
-
- # MXS-1585: Crash in MaxScale 2.1.12
- # https://jira.mariadb.org/browse/MXS-1585
-add_test_executable(mxs1585.cpp mxs1585 mxs1585 LABELS GALERA_BACKEND)
 
 # MXS-1643: Too many monitor events are triggered
 # https://jira.mariadb.org/browse/MXS-1643
@@ -648,9 +598,6 @@ add_test_executable(no_password.cpp no_password replication LABELS MySQLAuth LIG
 # Open and immediatelly close a big number of connections
 add_test_executable(open_close_connections.cpp open_close_connections replication LABELS maxscale readwritesplit REPL_BACKEND)
 
-# Test with persistant connections configured and big number iof opened connections ,expect no crash
-add_test_executable(pers_02.cpp pers_02 pers_01 LABELS maxscale GALERA_BACKEND REPL_BACKEND readwritesplit)
-
 # Check if prepared statement works via Maxscale (via RWSplit)
 add_test_executable(prepared_statement.cpp prepared_statement replication LABELS readwritesplit LIGHT REPL_BACKEND)
 
@@ -689,9 +636,6 @@ add_test_executable(rwsplit_multi_stmt.cpp rwsplit_multi_stmt rwsplit_multi_stmt
 
 # Schemarouter duplicate database detection test: create DB on all nodes and then try query againt schema router
 add_test_executable(schemarouter_duplicate.cpp schemarouter_duplicate schemarouter_duplicate LABELS schemarouter REPL_BACKEND)
-
-# Test of external script execution
-add_test_executable(script.cpp script script LABELS maxscale REPL_BACKEND GALERA_BACKEND)
 
 # Test 10.3 SEQUENCE objects
 add_test_executable(sequence.cpp sequence replication LABELS LIGHT REPL_BACKEND)
@@ -870,9 +814,6 @@ add_test_executable(mxs2450_change_user_crash.cpp mxs2450_change_user_crash mxs2
 # MXS-1662: PAM admin authentication
 add_test_executable(mxs1662_pam_admin.cpp mxs1662_pam_admin mxs1662_pam_admin LABELS REPL_BACKEND)
 
-# MXS-2441: Add support for read-only slaves to galeramon
-add_test_executable(mxs2441_galera_slaves.cpp mxs2441_galera_slaves mxs2441_galera_slaves LABELS REPL_BACKEND GALERA_BACKEND)
-
 # MXS-2414: Block host after repeated authentication failures
 add_test_executable(mxs2414_host_blocking.cpp mxs2414_host_blocking replication LABELS REPL_BACKEND)
 
@@ -883,6 +824,13 @@ add_test_executable(mxs2414_host_blocking.cpp mxs2414_host_blocking replication 
 # 4. lower_case_table_names
 # 5. log_password_mismatch (MXS-2916)
 add_test_executable(pam_authentication.cpp pam_authentication pam_authentication LABELS REPL_BACKEND)
+
+# MXS-3225, MXS-2383 Pam two factor authentication (2FA) test. Works only on Centos so far, so label as
+# HEAVY to prevent runs on general test runs.
+add_test_executable(pam_authentication_2fa.cpp pam_authentication_2fa pam_authentication_2fa LABELS HEAVY REPL_BACKEND)
+
+# Test three jdbc-connectors.
+add_test_executable(jdbc_connectors.cc jdbc_connectors replication REPL_BACKEND)
 
 # MXS-2350: On-demand connection creation
 add_test_executable(mxs2350_lazy_connect.cpp mxs2350_lazy_connect mxs2350_lazy_connect LABELS REPL_BACKEND readwritesplit)
@@ -965,6 +913,15 @@ add_test_executable(mxs2919_broken_slaves.cpp mxs2919_broken_slaves mxs2919_brok
 
 # MXS-2972: Caching of shards must take servers into notice
 add_test_executable(mxs2972_shard_caching.cc mxs2972_shard_caching mxs2972_shard_caching LABELS REPL_BACKEND schemarouter)
+
+# MXS-3218: Crash with LOAD DATA LOCAL INFILE
+add_test_executable(mxs3218_ldli_crash.cc mxs3218_ldli_crash replication LABELS REPL_BACKEND)
+
+# MXS-3220: Crash on master reconnection with session command
+add_test_executable(mxs3220_reconnect_crash.cc mxs3220_reconnect_crash mxs3220_reconnect_crash LABELS REPL_BACKEND readwritesplit)
+
+# MXS-3339: Hang with COM_STMT_CLOSE in sescmd history
+add_test_executable(mxs3339_stmt_close_hang.cc mxs3339_stmt_close_hang mxs3339_stmt_close_hang LABELS REPL_BACKEND readwritesplit)
 
 ############################################
 # END: Normal tests                        #
@@ -1079,23 +1036,94 @@ set_tests_properties(bug471_big PROPERTIES TIMEOUT 3600)
 ############################################
 
 ############################################
-# BEGIN: tests for Clustrix monitor        #
+# BEGIN: Galera tests                      #
 ############################################
 
-# creates Clustrix cluster and connect Maxscale to it
-add_test_executable(clustrix_mon.cpp clustrix_mon clustrix_mon LABELS CLUSTRIX_BACKEND UNSTABLE)
-set_tests_properties(clustrix_mon PROPERTIES TIMEOUT 7200)
+# Crash in case of backend node in Galera cluster stopping and then reconnect to Maxscale
+add_test_executable(bug676.cpp bug676 galera LABELS galeramon GALERA_BACKEND)
 
-add_test_executable(clustrix_basics.cpp clustrix_basics clustrix_basics LABELS CLUSTRIX_BACKEND)
-set_tests_properties(clustrix_basics PROPERTIES TIMEOUT 7200)
+# Galera node priority test
+add_test_executable(galera_priority.cpp galera_priority galera_priority LABELS galeramon LIGHT GALERA_BACKEND)
 
-add_test_executable(clustrix_transaction_replay.cpp clustrix_transaction_replay clustrix_transaction_replay LABELS CLUSTRIX_BACKEND)
-set_tests_properties(clustrix_transaction_replay PROPERTIES TIMEOUT 7200)
+# INSERT extremelly big number of rows
+add_test_executable(lots_of_rows.cpp lots_of_rows galera LABELS readwritesplit HEAVY GALERA_BACKEND)
 
-add_test_executable(clustrix_distribution.cpp clustrix_distribution clustrix_distribution LABELS CLUSTRIX_BACKEND)
+# Prepearing and execution statements in the loop
+add_test_executable(mxs244_prepared_stmt_loop.cpp mxs244_prepared_stmt_loop galera LABELS readwritesplit readconnroute LIGHT GALERA_BACKEND)
+
+# Playing with blocking and unblocking nodes under INSERT load
+add_test_executable(mxs564_big_dump.cpp mxs564_big_dump galera_mxs564 LABELS readwritesplit readconnroute GALERA_BACKEND)
+
+# MXS-1476: priority value ignored when a Galera node rejoins with a lower wsrep_local_index than current master
+# https://jira.mariadb.org/browse/MXS-1476
+add_test_executable(mxs1476.cpp mxs1476 mxs1476 LABELS galeramon GALERA_BACKEND)
+
+# MXS-1751: Maxscale crashes when certain config is in play (with nodes down)
+# https://jira.mariadb.org/browse/MXS-1751
+add_test_executable(mxs1751_available_when_donor_crash.cpp mxs1751_available_when_donor_crash mxs1751_available_when_donor_crash LABELS galeramon GALERA_BACKEND)
+
+# Persistant connection test
+add_test_executable(pers_01.cpp pers_01 pers_01 LABELS maxscale REPL_BACKEND readwritesplit GALERA_BACKEND)
+
+# Test with extremely big blob inserting/selecting with > 16 mb data blocks
+add_test_executable(mxs1110_16mb.cpp mxs1110_16mb longblob_filters LABELS readwritesplit readconnroute HEAVY REPL_BACKEND GALERA_BACKEND)
+
+# A set of MariaDB server tests executed against Maxscale RWSplit (Galera backend)
+add_test_script(mariadb_tests_hartmut_galera.sh mariadb_tests_hartmut.sh galera_hartmut LABELS readwritesplit GALERA_BACKEND)
+
+# Crash with Galera and backend restart when persistant cfonnections are in use
+add_test_derived(mxs361 pers_02 mxs361 mxs361 LABELS maxscale REPL_BACKEND GALERA_BACKEND)
+
+# Simple connect test in bash, checks that defined in cmd line DB is selected (Galera backend)
+add_test_script(mxs791_galera.sh mxs791.sh galera LABELS UNSTABLE HEAVY GALERA_BACKEND)
+
+ # MXS-1585: Crash in MaxScale 2.1.12
+ # https://jira.mariadb.org/browse/MXS-1585
+add_test_executable(mxs1585.cpp mxs1585 mxs1585 LABELS GALERA_BACKEND)
+
+# Test with persistant connections configured and big number iof opened connections ,expect no crash
+add_test_executable(pers_02.cpp pers_02 pers_01 LABELS maxscale GALERA_BACKEND REPL_BACKEND readwritesplit)
+
+# Test of external script execution
+add_test_executable(script.cpp script script LABELS maxscale REPL_BACKEND GALERA_BACKEND)
+
+# MXS-2441: Add support for read-only slaves to galeramon
+add_test_executable(mxs2441_galera_slaves.cpp mxs2441_galera_slaves mxs2441_galera_slaves LABELS REPL_BACKEND GALERA_BACKEND)
 
 ############################################
-# END: tests for Clustrix monitor          #
+# END: Galera tests                        #
+############################################
+
+############################################
+# BEGIN: ColumnStore tests                 #
+############################################
+
+# MXS-2146: Add test case for csmon
+# https://jira.mariadb.org/browse/MXS-2146
+add_test_executable(csmon_test.cpp csmon_test csmon_test LABELS csmon CS_BACKEND)
+
+############################################
+# END: ColumnStore tests                   #
+############################################
+
+############################################
+# BEGIN: tests for Xpand monitor        #
+############################################
+
+# creates Xpand cluster and connect Maxscale to it
+add_test_executable(xpand_mon.cpp xpand_mon xpand_mon LABELS XPAND_BACKEND UNSTABLE)
+set_tests_properties(xpand_mon PROPERTIES TIMEOUT 7200)
+
+add_test_executable(xpand_basics.cpp xpand_basics xpand_basics LABELS XPAND_BACKEND)
+set_tests_properties(xpand_basics PROPERTIES TIMEOUT 7200)
+
+add_test_executable(xpand_transaction_replay.cpp xpand_transaction_replay xpand_transaction_replay LABELS XPAND_BACKEND)
+set_tests_properties(xpand_transaction_replay PROPERTIES TIMEOUT 7200)
+
+add_test_executable(xpand_distribution.cpp xpand_distribution xpand_distribution LABELS XPAND_BACKEND)
+
+############################################
+# END: tests for Xpand monitor          #
 ############################################
 
 ############################################

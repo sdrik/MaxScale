@@ -65,20 +65,20 @@ public:
     /**
      * @brief Unix socket to connecto to MariaDB
      */
-    char * socket[256];
+    std::string socket[256];
     /**
      * @brief 'socket=$socket' line
      */
-    char * socket_cmd[256];
+    std::string socket_cmd[256];
 
     /**
      * @brief   User name to access backend nodes
      */
-    char * user_name;
+    std::string user_name;
     /**
      * @brief   Password to access backend nodes
      */
-    char * password;
+    std::string password;
     /**
      * @brief master index of node which was last configured to be Master
      */
@@ -87,18 +87,18 @@ public:
     /**
      * @brief start_db_command Command to start DB server
      */
-    char * start_db_command[256];
+    std::string start_db_command[256];
 
     /**
      * @brief stop_db_command Command to start DB server
      */
-    char * stop_db_command[256];
+    std::string stop_db_command[256];
 
     /**
      * @brief cleanup_db_command Command to remove all
      * data files and re-install DB with mysql_install_db
      */
-    char * cleanup_db_command[256];
+    std::string cleanup_db_command[256];
 
     /**
      * @brief ssl if true ssl will be used
@@ -409,17 +409,16 @@ public:
     int truncate_mariadb_logs();
 
     /**
-     * @brief configure_ssl Modifies my.cnf in order to enable ssl, redefine access user to require ssl
-     * @return 0 if success
+     * Checks that an SSL connection can be created to the node
+     *
+     * @return True if an encrypted connection to the database was created
      */
-    int configure_ssl(bool require);
+    bool check_ssl(int node);
 
     /**
-     * @brief disable_ssl Modifies my.cnf in order to get rid of ssl, redefine access user to allow
-     * connections without ssl
-     * @return 0 if success
+     * Disables the server SSL configuration
      */
-    int disable_ssl();
+    void disable_ssl();
 
     /**
      * @brief Synchronize slaves with the master

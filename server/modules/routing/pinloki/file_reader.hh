@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -37,7 +37,7 @@ namespace pinloki
 class FileReader    // : public Storage
 {
 public:
-    FileReader(const maxsql::Gtid& gtid, const Inventory* inv);
+    FileReader(const maxsql::Gtid& gtid, const InventoryReader* inv);
     ~FileReader();
 
     maxsql::RplEvent fetch_event();
@@ -69,13 +69,13 @@ private:
     void              set_inotify_fd();
     std::vector<char> fetch_raw();
 
-    int              m_inotify_fd;
-    int              m_inotify_descriptor = -1;
-    ReadPosition     m_read_pos;
-    uint32_t         m_server_id;
-    const Inventory& m_inventory;
-    std::string      m_generate_rotate_to;
-    bool             m_generating_preamble = true;
-    int              m_initial_gtid_file_pos = 0;
+    int                    m_inotify_fd;
+    int                    m_inotify_descriptor = -1;
+    ReadPosition           m_read_pos;
+    uint32_t               m_server_id;
+    const InventoryReader& m_inventory;
+    std::string            m_generate_rotate_to;
+    bool                   m_generating_preamble = true;
+    int                    m_initial_gtid_file_pos = 0;
 };
 }

@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -36,7 +36,9 @@ int main(int argc, char** argv)
     delete_slave_binlogs(test);
     basic_test(test);
     MYSQL* conn = test.maxscales->open_rwsplit_connection(0);
-    if (!generate_traffic_and_check(test, conn, 5))
+    bool success = generate_traffic_and_check(test, conn, 5);
+    mysql_close(conn);
+    if (!success)
     {
         return test.global_result;
     }

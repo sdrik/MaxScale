@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -33,7 +33,10 @@ RWBackend::RWBackend(mxs::Endpoint* ref)
 bool RWBackend::execute_session_command()
 {
     const auto& sescmd = next_session_command();
-    MXS_INFO("Execute sescmd %lu on '%s': %s", sescmd->get_position(), name(), sescmd->to_string().c_str());
+    const char* cmd = STRPACKETTYPE(sescmd->command());
+    MXS_INFO("Execute sescmd #%lu on '%s': [%s] %s",
+             sescmd->get_position(), name(), cmd, sescmd->to_string().c_str());
+
     m_last_write = maxbase::Clock::now(maxbase::NowType::EPollTick);
     return mxs::Backend::execute_session_command();
 }

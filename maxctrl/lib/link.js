@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -16,6 +16,7 @@ function addServer(argv, path, targets) {
   maxctrl(argv, function (host) {
     var srvs;
     var mons;
+    var svcs;
 
     return getJson(host, "servers")
       .then((r) => {
@@ -24,6 +25,10 @@ function addServer(argv, path, targets) {
       })
       .then((r) => {
         mons = r;
+        return getJson(host, "services");
+      })
+      .then((r) => {
+        svcs = r;
         return getJson(host, path);
       })
       .then((res) => {
@@ -31,15 +36,17 @@ function addServer(argv, path, targets) {
         var services = _.get(res, "data.relationships.services.data", []);
         var monitors = _.get(res, "data.relationships.monitors.data", []);
 
-        targets.forEach(function (i) {
+        for (i of targets) {
           if (srvs.data.find((e) => e.id == i)) {
             servers.push({ id: i, type: "servers" });
           } else if (mons.data.find((e) => e.id == i)) {
             monitors.push({ id: i, type: "monitors" });
-          } else {
+          } else if (svcs.data.find((e) => e.id == i)) {
             services.push({ id: i, type: "services" });
+          } else {
+            return error("Object '" + i + "' is not a valid server, service or monitor");
           }
-        });
+        }
 
         // Update relationships and remove unnecessary parts
         _.set(res, "data.relationships.servers.data", servers);

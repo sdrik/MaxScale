@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -1442,7 +1442,7 @@ fw_actions DbfwSession::get_action() const
 int DbfwSession::send_error()
 {
     mxb_assert(m_session);
-    auto db = static_cast<MYSQL_session*>(m_session->protocol_data())->db;
+    auto db = m_session->database();
     std::stringstream ss;
     ss << "Access denied for user '" << user() << "'@'" << remote() << "'";
 

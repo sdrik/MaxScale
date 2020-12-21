@@ -155,6 +155,7 @@ runtime and can only be defined in a configuration file:
 * `admin_ssl_key`
 * `admin_ssl_cert`
 * `admin_ssl_ca_cert`
+* `admin_ssl_version`
 * `admin_enabled`
 
 All other parameters that relate to objects can be altered at runtime or can be
@@ -1020,13 +1021,18 @@ The session trace log is also exposed by REST API and is shown with
 ### `writeq_high_water`
 
 High water mark for network write buffer. When the size of the outbound network
-buffer for a single connection exceeds this value, network traffic throtting for
-that connectino is started. The parameter accepts [size type
-values](#sizes). The default value is 16777216 bytes.
+buffer in MaxScale for a single connection exceeds this value, network traffic
+throtting for that connection is started. The parameter accepts
+[size type values](#sizes). The default value is 16777216 bytes.
 
 More specifically, if the client side write queue is above this value, it will
 block traffic coming from backend servers. If the backend side write queue is
 above this value, it will block traffic from client.
+
+The buffer that this parameter controls is the buffer internal to MaxScale and
+is not the kernel TCP send buffer. This means that the total amount of buffered
+data is determined by both the kernel TCP buffers and the value of
+`writeq_high_water`.
 
 Network throttling is only enabled when both `writeq_high_water` and
 `writeq_low_water` have a non-zero value. To disable throttling, set the value
@@ -1121,6 +1127,24 @@ The path to the TLS CA certificate in PEM format. If defined, the client
 certificate, if provided, will be validated against it. This parameter is
 optional starting with MaxScale 2.3.19.
 
+### `admin_ssl_version`
+
+Controls the minimum TLS version required to use the REST API.
+
+Accepted values are:
+
+ * TLSv10
+ * TLSv11
+ * TLSv12
+ * TLSv13
+ * MAX
+
+The default value is MAX which negotiates the highest level of encryption that
+both the client and server support. The list of supported TLS versions depends
+on the operating system and what TLS versions the GnuTLS library supports.
+
+This parameter was added in MaxScale 2.5.7.
+
 ### `admin_enabled`
 
 Enable or disable the admin interface. This allows the admin interface to
@@ -1200,6 +1224,16 @@ of a particular event is defined to be `LOG_EMERG`, MaxScale will not shut
 down if that event occurs.
 
 The default facility is `LOG_USER` and the default level is `LOG_WARNING`.
+
+Note that you may also have to configure `rsyslog` to ensure that the
+event can be logged to the intended log file. For instance, if the facility
+is chosen to be `LOG_AUTH`, then `/etc/rsyslog.conf` should contain a line
+like
+```
+auth,authpriv.*                 /var/log/auth.log
+```
+for the logged events to end up in `/var/log/auth.log`, where the initial
+`auth` is the relevant entry.
 
 The available events are:
 
@@ -1527,6 +1561,15 @@ value of `service` in the listener). If a service defines other services in its
 If the value of `connection_keepalive` is changed at runtime, the change in the
 value takes effect immediately.
 
+As the connection keepalive pings must be done only when there's no ongoing
+query, all requests and responses must be tracked by MaxScale. In the case of
+`readconnroute`, this will incur a small drop in performance. For routers that
+rely on result tracking (e.g. `readwritesplit` and `schemarouter`), the
+performance will be the same with or without `connection_keepalive`.
+
+If you want to avoid the performance cost and you don't need the connection
+keepalive feature, you can disable it with `connection_keepalive=0s`.
+
 ### `net_write_timeout`
 
 This parameter controls how long a network write to the client can stay
@@ -1754,6 +1797,13 @@ The `main-site-master` and `main-site-slave` servers will be used as long as
 they are available. When they are no longer available, the `DR-site-master` and
 `DR-site-slave` will be used.
 
+## Monitor
+
+Monitor sections are used to define the monitoring module that watches a set of
+servers. Each server can only be monitored by one monitor.
+
+Common monitor parameters [can be found here](../Monitors/Monitor-Common.md).
+
 ## Listener
 
 A listener defines a port MaxScale listens on for incoming connections. Accepted
@@ -1897,6 +1947,9 @@ server which allows both secure and insecure connections on the same port. As
 MaxScale is the gateway through which all connections go, in order to guarantee
 a more secure system MaxScale enforces a stricter security policy than what the
 server does.
+
+TLS encryption must be enabled for listeners when they are created. For servers,
+the TLS can be enabled after creation but it cannot be disabled or altered.
 
 ### `ssl`
 

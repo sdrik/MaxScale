@@ -73,7 +73,7 @@ then
        perl libtool tcl tcl-dev uuid \
        uuid-dev libsqlite3-dev liblzma-dev libpam0g-dev pkg-config \
        libedit-dev libcurl4-openssl-dev libatomic1 \
-       libsasl2-dev libxml2-dev
+       libsasl2-dev libxml2-dev libkrb5-dev
 
   # One of these will work, older systems use libsystemd-daemon-dev
   ${apt_cmd} install libsystemd-dev || \
@@ -117,10 +117,7 @@ then
          gnupg flex rpmdevtools git wget tcl tcl-devel openssl libuuid-devel xz-devel \
          sqlite sqlite-devel pkgconfig lua lua-devel rpm-build createrepo yum-utils \
          gnutls-devel libgcrypt-devel pam-devel libcurl-devel libatomic \
-         cyrus-sasl-devel libxml2-devel
-
-    # Attempt to install libasan, it'll only work on CentOS 7
-    sudo yum install -y --nogpgcheck libasan
+         cyrus-sasl-devel libxml2-devel krb5-devel
 
     # Attempt to install systemd-devel, doesn't work on CentOS 6
     sudo yum install -y systemd-devel
@@ -137,9 +134,12 @@ then
     if [ $? -eq 0 ]
     then
         sudo yum -y install devtoolset-7-gcc-c++
-
+        sudo yum -y install devtoolset-7-libasan-devel
         # Enable it by default
         echo "source /opt/rh/devtoolset-7/enable" >> ~/.bashrc
+    else
+        # CentOS 8 only needs ASAN
+        sudo yum -y install libasan-devel
     fi
 
     grep "release [78]" /etc/redhat-release
@@ -163,7 +163,7 @@ then
          git wget tcl tcl-devel libuuid-devel \
          xz-devel sqlite3 sqlite3-devel pkg-config lua lua-devel \
          gnutls-devel libgcrypt-devel pam-devel systemd-devel libcurl-devel libatomic1 \
-         cyrus-sasl-devel libxml2-devel
+         cyrus-sasl-devel libxml2-devel krb5-devel
     sudo zypper -n install rpm-build
     cat /etc/*-release | grep "SUSE Linux Enterprise Server 11"
 

@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -77,6 +77,7 @@ struct NAME_MAPPING
 
 static NAME_MAPPING name_mappings[] =
 {
+    {MODULE_MONITOR,       "clustrixmon", "xpandmon",      false},
     {MODULE_MONITOR,       "mysqlmon",    "mariadbmon",    false},
     {MODULE_PROTOCOL,      "mysqlclient", "mariadbclient", false},
     {MODULE_PROTOCOL,      "mariadb",     "mariadbclient", true },
@@ -290,8 +291,9 @@ static int load_module_cb(const char* fpath, const struct stat* sb, int typeflag
 
                 if (is_maxscale_module(fpath) && !load_module(module.c_str(), nullptr))
                 {
-                    MXS_WARNING("Failed to load '%s'. Make sure it is not a stale library "
-                                "left over from an old installation of MaxScale.", fpath);
+                    MXS_ERROR("Failed to load '%s'. Make sure it is not a stale library "
+                              "left over from an old installation of MaxScale.", fpath);
+                    rval = 1;
                 }
             }
         }

@@ -39,9 +39,8 @@ const string label_repl_be = "REPL_BACKEND";
 const string label_galera_be = "GALERA_BACKEND";
 const string label_big_be = "BIG_REPL_BACKEND";
 const string label_2nd_mxs = "SECOND_MAXSCALE";
-const string label_clx_be = "CLUSTRIX_BACKEND";
 const string label_columnstore_be = "COLUMNSTORE_BACKEND";
-
+const string label_clx_be = "XPAND_BACKEND";
 
 const StringSet recognized_mdbci_labels =
 {label_repl_be, label_big_be, label_galera_be, label_2nd_mxs, label_columnstore_be, label_clx_be};
@@ -181,127 +180,12 @@ TestConnections::TestConnections(int argc, char* argv[])
         tprintf("Test has BACKEND_SSL label");
     }
 
-    StringSet missing_mdbci_labels;
-    std::set_difference(m_required_mdbci_labels.begin(), m_required_mdbci_labels.end(),
-                        m_configured_mdbci_labels.begin(), m_configured_mdbci_labels.end(),
-                        std::inserter(missing_mdbci_labels, missing_mdbci_labels.begin()));
-
-    bool mdbci_call_needed = false;
-    if (missing_mdbci_labels.empty())
+    if (!check_create_vms())
     {
-        if (verbose)
-        {
-            tprintf("Machines with all required labels '%s' are running, MDBCI UP call is not needed",
-                    m_mdbci_labels_str.c_str());
-        }
-    }
-    else
-    {
-        string missing_labels_str = flatten_stringset(missing_mdbci_labels);
-        tprintf("Machines with labels '%s' are not running, MDBCI UP call is needed",
-                missing_labels_str.c_str());
-        mdbci_call_needed = true;
+        exit(MDBCI_FAIL);
     }
 
-    if (mdbci_call_needed)
-    {
-        if (call_mdbci(""))
-        {
-            exit(MDBCI_FAIL);
-        }
-    }
-
-    bool use_repl = false;
-    if (m_required_mdbci_labels.count(label_repl_be) > 0)
-    {
-        use_repl = true;
-    }
-
-    bool use_galera = false;
-    if (m_required_mdbci_labels.count(label_galera_be) > 0)
-    {
-        use_galera = true;
-    }
-
-    bool use_clustrix = false;
-    if (m_required_mdbci_labels.count(label_clx_be) > 0)
-    {
-        use_clustrix = true;
-    }
-
-    bool use_columnstore = false;
-    if (m_required_mdbci_labels.count(label_columnstore_be) > 0)
-    {
-        use_columnstore = true;
-    }
-
-    std::future<bool> repl_future;
-    std::future<bool> galera_future;
-
-    if (use_repl)
-    {
-        repl = new Mariadb_nodes("node", test_dir, verbose, m_network_config);
-        repl->setup();
-        repl->set_use_ipv6(m_use_ipv6);
-        repl->take_snapshot_command = m_take_snapshot_command.c_str();
-        repl->revert_snapshot_command = m_revert_snapshot_command.c_str();
-        repl_future = std::async(std::launch::async, &Mariadb_nodes::check_nodes, repl);
-    }
-    else
-    {
-        repl = NULL;
-    }
-
-    if (use_galera)
-    {
-        galera = new Galera_nodes("galera", test_dir, verbose, m_network_config);
-        galera->setup();
-        galera->set_use_ipv6(false);
-        galera->take_snapshot_command = m_take_snapshot_command.c_str();
-        galera->revert_snapshot_command = m_revert_snapshot_command.c_str();
-        galera_future = std::async(std::launch::async, &Galera_nodes::check_nodes, galera);
-    }
-    else
-    {
-        galera = NULL;
-    }
-
-    if (use_clustrix)
-    {
-        clustrix = new Clustrix_nodes("clustrix", test_dir, verbose, m_network_config);
-        clustrix->setup();
-        clustrix->set_use_ipv6(false);
-        clustrix->take_snapshot_command = m_take_snapshot_command.c_str();
-        clustrix->revert_snapshot_command = m_revert_snapshot_command.c_str();
-        clustrix->fix_replication();
-    }
-    else
-    {
-        clustrix = NULL;
-    }
-
-    if (use_columnstore)
-    {
-        columnstore = new Columnstore_nodes("columnstore", test_dir, verbose, m_network_config);
-        columnstore->setup();
-        columnstore->set_use_ipv6(false);
-        columnstore->take_snapshot_command = m_take_snapshot_command.c_str();
-        columnstore->revert_snapshot_command = m_revert_snapshot_command.c_str();
-        //columnstore->fix_replication();
-    }
-    else
-    {
-        columnstore = NULL;
-    }
-
-    maxscales = new Maxscales("maxscale", test_dir, verbose, m_network_config);
-    maxscales->setup();
-    m_maxscale = std::make_unique<mxt::MaxScale>(maxscales, *m_logger, 0);
-
-    bool maxscale_ok = maxscales->check_nodes();
-    bool repl_ok = !use_repl || repl_future.get();
-    bool galera_ok = !use_galera || galera_future.get();
-    bool node_error = !maxscale_ok || !repl_ok || !galera_ok;
+    bool node_error = !initialize_nodes();
     bool initialize = false;
 
     if (node_error || too_few_maxscales())
@@ -362,34 +246,10 @@ TestConnections::TestConnections(int argc, char* argv[])
         }
     }
 
-    if (repl && maxscale::required_repl_version.length())
+    if (!check_backend_versions())
     {
-        int ver_repl_required = get_int_version(maxscale::required_repl_version);
-        std::string ver_repl = repl->get_lowest_version();
-        int int_ver_repl = get_int_version(ver_repl);
-
-        if (int_ver_repl < ver_repl_required)
-        {
-            tprintf("Test requires a higher version of backend servers, skipping test.");
-            tprintf("Required version: %s", maxscale::required_repl_version.c_str());
-            tprintf("Master-slave version: %s", ver_repl.c_str());
-            exit(0);
-        }
-    }
-
-    if (galera && maxscale::required_galera_version.length())
-    {
-        int ver_galera_required = get_int_version(maxscale::required_galera_version);
-        std::string ver_galera = galera->get_lowest_version();
-        int int_ver_galera = get_int_version(ver_galera);
-
-        if (int_ver_galera < ver_galera_required)
-        {
-            tprintf("Test requires a higher version of backend servers, skipping test.");
-            tprintf("Required version: %s", maxscale::required_galera_version.c_str());
-            tprintf("Galera version: %s", ver_galera.c_str());
-            exit(0);
-        }
+        tprintf("Skipping test.");
+        exit(0);
     }
 
     if (m_init_maxscale)
@@ -397,18 +257,7 @@ TestConnections::TestConnections(int argc, char* argv[])
         init_maxscales();
     }
 
-    if (backend_ssl)
-    {
-        tprintf("Configuring backends for ssl \n");
-        repl->configure_ssl(true);
-        if (galera)
-        {
-            galera->configure_ssl(false);
-            galera->start_replication();
-        }
-    }
-
-    if (mdbci_call_needed)
+    if (m_mdbci_called)
     {
         auto res = maxscales->ssh_output("maxscale --version-full", 0, false);
         if (res.rc != 0)
@@ -425,10 +274,8 @@ TestConnections::TestConnections(int argc, char* argv[])
     sprintf(str, "mkdir -p LOGS/%s", m_test_name.c_str());
     call_system(str);
 
-    timeout = 999999999;
-    set_log_copy_interval(999999999);
-    pthread_create(&timeout_thread_p, NULL, timeout_thread, this);
-    pthread_create(&log_copy_thread_p, NULL, log_copy_thread, this);
+    m_timeout_thread = std::thread(&TestConnections::timeout_thread, this);
+    m_log_copy_thread = std::thread(&TestConnections::log_copy_thread, this);
     tprintf("Starting test");
     gettimeofday(&m_start_time, NULL);
     m_logger->reset_timer();
@@ -447,17 +294,6 @@ TestConnections::~TestConnections()
         a();
     }
 
-    if (backend_ssl)
-    {
-        repl->disable_ssl();
-        // galera->disable_ssl();
-
-        // TODO: Presumably that repl->disable_ssl() call should remove the SSL requirement,
-        // TODO: but that it does not do as any non-SSL test folling will not work.
-        // TODO: Creating the users seems to fix it, so for the time being we do that.
-        repl->create_users();
-    }
-
     // stop all Maxscales to detect crashes on exit
     for (int i = 0; i < maxscales->N; i++)
     {
@@ -468,6 +304,10 @@ TestConnections::~TestConnections()
     {
         sleep(15);      // sleep to let logs be written do disks
     }
+
+    m_stop_threads = true;
+    m_timeout_thread.join();
+    m_log_copy_thread.join();
 
     copy_all_logs();
 
@@ -486,19 +326,16 @@ TestConnections::~TestConnections()
      *  }
      */
 
-    if (repl)
-    {
-        delete repl;
-    }
-    if (galera)
-    {
-        delete galera;
-    }
+    delete repl;
+    delete galera;
+    delete xpand;
 
     if (maxscale::multiple_maxscales)
     {
         maxscales->stop_all();
     }
+
+    delete maxscales;
 
     if (global_result)
     {
@@ -616,8 +453,8 @@ void TestConnections::read_env()
 void TestConnections::print_env()
 {
     printf("Maxscale IP\t%s\n", maxscales->ip4(0));
-    printf("Maxscale User name\t%s\n", maxscales->user_name);
-    printf("Maxscale Password\t%s\n", maxscales->password);
+    printf("Maxscale User name\t%s\n", maxscales->user_name.c_str());
+    printf("Maxscale Password\t%s\n", maxscales->password.c_str());
     printf("Maxscale SSH key\t%s\n", maxscales->sshkey(0));
     printf("Access user\t%s\n", maxscales->access_user(0));
     if (repl)
@@ -690,17 +527,6 @@ void TestConnections::process_template(int m, const string& cnf_template_path, c
         return;
     }
 
-    if (backend_ssl)
-    {
-        tprintf("Adding ssl settings\n");
-        const char sed_cmd[] = "sed -i "
-                               "\"s|type=server|type=server\\nssl=required\\nssl_cert=/###access_homedir###/"
-                               "certs/client-cert.pem\\nssl_key=/###access_homedir###/certs/client-key.pem"
-                               "\\nssl_ca_cert=/###access_homedir###/certs/ca.pem\\nssl_cert_verify_depth=9"
-                               "\\nssl_version=MAX|g\" maxscale.cnf";
-        system(sed_cmd);
-    }
-
     sprintf(str, "sed -i \"s/###threads###/%d/\"  maxscale.cnf", m_threads);
     system(str);
 
@@ -708,7 +534,7 @@ void TestConnections::process_template(int m, const string& cnf_template_path, c
     const char* IPcnf;
     mdn[0] = repl;
     mdn[1] = galera;
-    mdn[2] = clustrix;
+    mdn[2] = xpand;
     mdn[3] = columnstore;
     int i, j;
     int mdn_n = 3;
@@ -749,6 +575,17 @@ void TestConnections::process_template(int m, const string& cnf_template_path, c
             execute_query(mdn[j]->nodes[0], (char*) "CREATE DATABASE IF NOT EXISTS test");
             mdn[j]->close_connections();
         }
+    }
+
+    if (backend_ssl)
+    {
+        tprintf("Adding ssl settings\n");
+        const char sed_cmd[] = "sed -i "
+                               "\"s|type *= *server|type=server\\nssl=required\\nssl_cert=/###access_homedir###/"
+                               "certs/client-cert.pem\\nssl_key=/###access_homedir###/certs/client-key.pem"
+                               "\\nssl_ca_cert=/###access_homedir###/certs/ca.pem\\nssl_cert_verify_depth=9"
+                               "\\nssl_version=MAX|g\" maxscale.cnf";
+        system(sed_cmd);
     }
 
     sprintf(str, "sed -i \"s/###access_user###/%s/g\" maxscale.cnf", maxscales->access_user(m));
@@ -803,8 +640,8 @@ void TestConnections::init_maxscale(int m)
                           "iptables -F INPUT;"
                           "rm -rf %s/*.log /tmp/core* /dev/shm/* /var/lib/maxscale/* /var/lib/maxscale/.secrets;"
                           "find /var/*/maxscale -name 'maxscale.lock' -delete;",
-                          maxscales->maxscale_cnf[m],
-                          maxscales->maxscale_log_dir[m]);
+                          maxscales->maxscale_cnf[m].c_str(),
+                          maxscales->maxscale_log_dir[m].c_str());
     if (maxscale::start)
     {
         maxscales->restart_maxscale(m);
@@ -860,7 +697,7 @@ int TestConnections::copy_mariadb_logs(Mariadb_nodes* nrepl,
             {
                 char str[4096];
                 sprintf(str, "LOGS/%s/%s%d_mariadb_log", m_test_name.c_str(), prefix, i);
-                threads.emplace_back(&TestConnections::copy_one_mariadb_log, this, nrepl, i, str);
+                threads.emplace_back(&TestConnections::copy_one_mariadb_log, this, nrepl, i, string(str));
             }
         }
     }
@@ -930,9 +767,9 @@ void TestConnections::copy_one_maxscale_log(int i, double timestamp)
                                        "test -e /tmp/core*  && exit 42;",
                                        homedir,
                                        homedir,
-                                       maxscales->maxscale_log_dir[i], homedir,
+                                       maxscales->maxscale_log_dir[i].c_str(), homedir,
                                        homedir,
-                                       maxscales->maxscale_cnf[i], homedir,
+                                       maxscales->maxscale_cnf[i].c_str(), homedir,
                                        homedir);
         sprintf(sys, "%s/logs/*", homedir);
         maxscales->copy_from_node(i, sys, log_dir_i);
@@ -940,9 +777,9 @@ void TestConnections::copy_one_maxscale_log(int i, double timestamp)
     }
     else
     {
-        maxscales->ssh_node_f(i, true, "cp %s/*.logs %s/", maxscales->maxscale_log_dir[i], log_dir_i);
+        maxscales->ssh_node_f(i, true, "cp %s/*.logs %s/", maxscales->maxscale_log_dir[i].c_str(), log_dir_i);
         maxscales->ssh_node_f(i, true, "cp /tmp/core* %s/", log_dir_i);
-        maxscales->ssh_node_f(i, true, "cp %s %s/", maxscales->maxscale_cnf[i], log_dir_i);
+        maxscales->ssh_node_f(i, true, "cp %s %s/", maxscales->maxscale_cnf[i].c_str(), log_dir_i);
         maxscales->ssh_node_f(i, true, "chmod a+r -R %s", log_dir_i);
     }
 }
@@ -991,27 +828,27 @@ int TestConnections::prepare_binlog(int m)
         add_result(maxscales->ssh_node_f(m,
                                          true,
                                          "sed -i \"s/,mariadb10-compatibility=1//\" %s",
-                                         maxscales->maxscale_cnf[m]),
+                                         maxscales->maxscale_cnf[m].c_str()),
                    "Error editing maxscale.cnf");
     }
 
     if (!m_local_maxscale)
     {
         tprintf("Removing all binlog data from Maxscale node");
-        add_result(maxscales->ssh_node_f(m, true, "rm -rf %s", maxscales->maxscale_binlog_dir[m]),
+        add_result(maxscales->ssh_node_f(m, true, "rm -rf %s", maxscales->maxscale_binlog_dir[m].c_str()),
                    "Removing binlog data failed");
 
         tprintf("Creating binlog dir");
-        add_result(maxscales->ssh_node_f(m, true, "mkdir -p %s", maxscales->maxscale_binlog_dir[m]),
+        add_result(maxscales->ssh_node_f(m, true, "mkdir -p %s", maxscales->maxscale_binlog_dir[m].c_str()),
                    "Creating binlog data dir failed");
         tprintf("Set 'maxscale' as a owner of binlog dir");
         add_result(maxscales->ssh_node_f(m,
                                          false,
                                          "%s mkdir -p %s; %s chown maxscale:maxscale -R %s",
                                          maxscales->access_sudo(m),
-                                         maxscales->maxscale_binlog_dir[m],
+                                         maxscales->maxscale_binlog_dir[m].c_str(),
                                          maxscales->access_sudo(m),
-                                         maxscales->maxscale_binlog_dir[m]),
+                                         maxscales->maxscale_binlog_dir[m].c_str()),
                    "directory ownership change failed");
     }
     else
@@ -1092,7 +929,7 @@ int TestConnections::start_binlog(int m)
     if (!m_local_maxscale)
     {
         tprintf("ls binlog data dir on Maxscale node\n");
-        add_result(maxscales->ssh_node_f(m, true, "ls -la %s/", maxscales->maxscale_binlog_dir[m]),
+        add_result(maxscales->ssh_node_f(m, true, "ls -la %s/", maxscales->maxscale_binlog_dir[m].c_str()),
                    "ls failed\n");
     }
 
@@ -1720,21 +1557,21 @@ int TestConnections::set_timeout(long int timeout_seconds)
 {
     if (m_enable_timeouts)
     {
-        timeout = timeout_seconds;
+        m_timeout = timeout_seconds;
     }
     return 0;
 }
 
 int TestConnections::set_log_copy_interval(long int interval_seconds)
 {
-    log_copy_to_go = interval_seconds;
-    log_copy_interval = interval_seconds;
+    m_log_copy_to_go = interval_seconds;
+    m_log_copy_interval = interval_seconds;
     return 0;
 }
 
 int TestConnections::stop_timeout()
 {
-    timeout = 999999999;
+    m_timeout = 999999999;
     return 0;
 }
 
@@ -1785,41 +1622,46 @@ int TestConnections::get_master_server_id(int m)
     mysql_close(conn);
     return master_id;
 }
-void* timeout_thread(void* ptr)
+
+void TestConnections::timeout_thread()
 {
-    TestConnections* Test = (TestConnections*) ptr;
-    struct timespec tim;
-    while (Test->timeout > 0)
+    while (!m_stop_threads && m_timeout > 0)
     {
+        struct timespec tim;
         tim.tv_sec = 1;
         tim.tv_nsec = 0;
         nanosleep(&tim, NULL);
-        Test->timeout--;
+        m_timeout--;
     }
-    Test->tprintf("\n **** Timeout! *** \n");
-    Test->~TestConnections();
-    exit(250);
+
+    if (!m_stop_threads)
+    {
+        copy_all_logs();
+        tprintf("\n **** Timeout! *** \n");
+        exit(250);
+    }
 }
 
-void* log_copy_thread(void* ptr)
+void TestConnections::log_copy_thread()
 {
-    TestConnections* Test = (TestConnections*) ptr;
-    struct timespec tim;
-    while (true)
+    while (!m_stop_threads)
     {
-        while (Test->log_copy_to_go > 0)
+        while (!m_stop_threads && m_log_copy_to_go > 0)
         {
+            struct timespec tim;
             tim.tv_sec = 1;
             tim.tv_nsec = 0;
             nanosleep(&tim, NULL);
-            Test->log_copy_to_go--;
+            m_log_copy_to_go--;
         }
-        Test->log_copy_to_go = Test->log_copy_interval;
-        Test->tprintf("\n **** Copying all logs *** \n");
-        Test->copy_all_logs_periodic();
-    }
 
-    return NULL;
+        if (!m_stop_threads)
+        {
+            m_log_copy_to_go = m_log_copy_interval;
+            tprintf("\n **** Copying all logs *** \n");
+            copy_all_logs_periodic();
+        }
+    }
 }
 
 int TestConnections::insert_select(int m, int N)
@@ -2055,11 +1897,11 @@ bool TestConnections::test_bad_config(int m, const string& config)
     // Set the timeout to prevent hangs with configurations that work
     set_timeout(20);
 
-    return maxscales->ssh_node_f(m,
+    int ssh_rc = maxscales->ssh_node_f(m,
                                  true,
                                  "cp /tmp/maxscale.cnf /etc/maxscale.cnf; pkill -9 maxscale; "
-                                 "maxscale -U maxscale -lstdout &> /dev/null && sleep 1 && pkill -9 maxscale")
-           == 0;
+                                 "maxscale -U maxscale -lstdout &> /dev/null && sleep 1 && pkill -9 maxscale");
+    return ((ssh_rc == 0) || (ssh_rc == 256));
 }
 int TestConnections::call_mdbci(const char* options)
 {
@@ -2116,7 +1958,7 @@ int TestConnections::process_mdbci_template()
 {
     string box = envvar_get_set("box", "centos_7_libvirt");
     string backend_box = envvar_get_set("backend_box", "%s", box.c_str());
-    envvar_get_set("columnstore_box", "%s", backend_box.c_str());
+    envvar_get_set("xpand_box", "%s", backend_box.c_str());
     envvar_get_set("clustrix_box", "%s", backend_box.c_str());
     envvar_get_set("target", "develop");
     envvar_get_set("vm_memory", "2048");
@@ -2368,6 +2210,166 @@ bool TestConnections::read_cmdline_options(int argc, char* argv[])
 
     m_test_name = (optind < argc) ? argv[optind] : basename(argv[0]);
     return true;
+}
+
+bool TestConnections::initialize_nodes()
+{
+    bool use_repl = false;
+    if (m_required_mdbci_labels.count(label_repl_be) > 0)
+    {
+        use_repl = true;
+    }
+
+    bool use_galera = false;
+    if (m_required_mdbci_labels.count(label_galera_be) > 0)
+    {
+        use_galera = true;
+    }
+
+    bool use_xpand = false;
+    if (m_required_mdbci_labels.count(label_clx_be) > 0)
+    {
+        use_xpand = true;
+    }
+    
+    bool use_columnstore = false;
+    if (m_required_mdbci_labels.count(label_columnstore_be) > 0)
+    {
+        use_columnstore = true;
+    }
+
+    std::future<bool> repl_future;
+    std::future<bool> galera_future;
+
+    if (use_repl)
+    {
+        repl = new Mariadb_nodes("node", test_dir, verbose, m_network_config);
+        repl->setup();
+        repl->set_use_ipv6(m_use_ipv6);
+        repl->ssl = backend_ssl;
+        repl->take_snapshot_command = m_take_snapshot_command.c_str();
+        repl->revert_snapshot_command = m_revert_snapshot_command.c_str();
+        repl_future = std::async(std::launch::async, &Mariadb_nodes::check_nodes, repl);
+    }
+    else
+    {
+        repl = NULL;
+    }
+
+    if (use_galera)
+    {
+        galera = new Galera_nodes("galera", test_dir, verbose, m_network_config);
+        galera->setup();
+        galera->set_use_ipv6(false);
+        galera->ssl = backend_ssl;
+        galera->take_snapshot_command = m_take_snapshot_command.c_str();
+        galera->revert_snapshot_command = m_revert_snapshot_command.c_str();
+        galera_future = std::async(std::launch::async, &Galera_nodes::check_nodes, galera);
+    }
+    else
+    {
+        galera = NULL;
+    }
+
+    if (use_xpand)
+    {
+        xpand = new Xpand_nodes("xpand", test_dir, verbose, m_network_config);
+        xpand->setup();
+        xpand->set_use_ipv6(false);
+        xpand->ssl = backend_ssl;
+        xpand->take_snapshot_command = m_take_snapshot_command.c_str();
+        xpand->revert_snapshot_command = m_revert_snapshot_command.c_str();
+        xpand->fix_replication();
+    }
+    else
+    {
+        xpand = NULL;
+    }
+    
+    if (use_columnstore)
+    {
+        columnstore = new Columnstore_nodes("columnstore", test_dir, verbose, m_network_config);
+        columnstore->setup();
+        columnstore->set_use_ipv6(false);
+        columnstore->take_snapshot_command = m_take_snapshot_command.c_str();
+        columnstore->revert_snapshot_command = m_revert_snapshot_command.c_str();
+        //columnstore->fix_replication();
+    }
+    else
+    {
+        columnstore = NULL;
+    }
+
+    maxscales = new Maxscales("maxscale", test_dir, verbose, m_network_config);
+    maxscales->setup();
+    m_maxscale = std::make_unique<mxt::MaxScale>(maxscales, *m_logger, 0);
+
+    bool maxscale_ok = maxscales->check_nodes();
+    bool repl_ok = !use_repl || repl_future.get();
+    bool galera_ok = !use_galera || galera_future.get();
+    return maxscale_ok && repl_ok && galera_ok;
+}
+
+bool TestConnections::check_backend_versions()
+{
+    auto tester = [this](Mariadb_nodes* cluster, const string& required_vrs_str) {
+        bool rval = true;
+        if (cluster && !required_vrs_str.empty())
+        {
+            string found_vrs_str = cluster->get_lowest_version();
+            int found_vrs = get_int_version(found_vrs_str);
+            int required_vrs = get_int_version(required_vrs_str);
+
+            if (found_vrs < required_vrs)
+            {
+                tprintf("Test cluster '%s' version '%s' is too low, test '%s' requires at least '%s'.",
+                        cluster->prefix().c_str(), found_vrs_str.c_str(),
+                        m_test_name.c_str(), required_vrs_str.c_str());
+                rval = false;
+            }
+        }
+        return rval;
+    };
+
+    auto repl_ok = tester(repl, maxscale::required_repl_version);
+    auto galera_ok = tester(galera, maxscale::required_galera_version);
+    return repl_ok && galera_ok;
+}
+
+bool TestConnections::check_create_vms()
+{
+    bool rval = true;
+    StringSet missing_mdbci_labels;
+    std::set_difference(m_required_mdbci_labels.begin(), m_required_mdbci_labels.end(),
+                        m_configured_mdbci_labels.begin(), m_configured_mdbci_labels.end(),
+                        std::inserter(missing_mdbci_labels, missing_mdbci_labels.begin()));
+
+    bool mdbci_call_needed = false;
+    if (missing_mdbci_labels.empty())
+    {
+        if (verbose)
+        {
+            tprintf("Machines with all required labels '%s' are running, MDBCI UP call is not needed",
+                    m_mdbci_labels_str.c_str());
+        }
+    }
+    else
+    {
+        string missing_labels_str = flatten_stringset(missing_mdbci_labels);
+        tprintf("Machines with labels '%s' are not running, MDBCI UP call is needed",
+                missing_labels_str.c_str());
+        mdbci_call_needed = true;
+    }
+
+    if (mdbci_call_needed)
+    {
+        if (call_mdbci(""))
+        {
+            rval = false;
+        }
+        m_mdbci_called = true;
+    }
+    return rval;
 }
 
 std::string cutoff_string(const string& source, char cutoff)

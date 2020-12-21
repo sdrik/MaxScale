@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -20,6 +20,9 @@ using namespace std;
 
 namespace
 {
+
+const int PORT_LOCAL_CACHE = 4006;
+const int PORT_REDIS_CACHE = 4007;
 
 void drop(TestConnections& test)
 {
@@ -76,6 +79,12 @@ void run(TestConnections& test, int port, Expect expect)
 
     Connection c = test.maxscales->get_connection(port);
     c.connect();
+    if (port == PORT_REDIS_CACHE)
+    {
+        // Short sleep, so that the asynchronous connecting surely
+        // has time to finish.
+        sleep(1);
+    }
     c.query("INSERT INTO cache_invalidate values (1)");
 
     Result rows = c.rows("SELECT * FROM cache_invalidate");
@@ -88,13 +97,10 @@ void run(TestConnections& test, int port, Expect expect)
 }
 }
 
-const int PORT_LOCAL_CACHE = 4006;
-const int PORT_REDIS_CACHE = 4007;
-
 void install_and_start_redis(Maxscales& maxscales)
 {
     setenv("maxscale_000_keyfile", maxscales.sshkey(0), 0);
-    setenv("maxscale_000_whoami", maxscales.user_name, 0);
+    setenv("maxscale_000_whoami", maxscales.user_name.c_str(), 0);
     setenv("maxscale_000_network", maxscales.ip4(0), 0);
 
     // This will install memcached as well, but that's ok.

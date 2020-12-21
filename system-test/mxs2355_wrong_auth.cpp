@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -21,8 +21,8 @@ int main(int argc, char** argv)
     TestConnections test(argc, argv);
     const char* host = test.maxscales->ip4(0);
     int port = test.maxscales->ports[0][0];
-    const char* user = test.maxscales->user_name;
-    const char* pass = test.maxscales->password;
+    const char* user = test.maxscales->user_name.c_str();
+    const char* pass = test.maxscales->password.c_str();
     const char plugin[] = "mysql_clear_password";
 
     test.tprintf("Trying to log in to [%s]:%i as %s with plugin '%s'.\n", host, port, user, plugin);

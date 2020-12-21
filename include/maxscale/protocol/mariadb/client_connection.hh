@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -14,6 +14,7 @@
 
 #include <maxscale/ccdefs.hh>
 #include <maxscale/protocol/mariadb/protocol_classes.hh>
+#include <maxscale/protocol/mariadb/local_client.hh>
 
 struct KillInfo;
 
@@ -47,6 +48,7 @@ public:
     int32_t connlimit(int limit) override;
     void    wakeup() override;
     bool    is_movable() const override;
+    void    kill() override;
 
     std::string current_db() const override;
 
@@ -103,6 +105,7 @@ private:
 
     SpecialCmdRes process_special_commands(GWBUF* read_buffer, uint8_t cmd);
     SpecialCmdRes handle_query_kill(GWBUF* read_buffer, uint32_t packet_len);
+    void          add_local_client(LocalClient* client);
 
     void track_transaction_state(MXS_SESSION* session, GWBUF* packetbuf);
     void execute_kill_all_others(uint64_t target_id, uint64_t keep_protocol_thread_id, kill_type_t type);
@@ -212,6 +215,8 @@ private:
 
     bool m_user_update_wakeup {false};      /**< Waking up because of user account update? */
     int  m_previous_userdb_version {0};     /**< Userdb version used for first user account search */
+
+    std::vector<std::unique_ptr<LocalClient>> m_local_clients;
 
     /**
      * Send an error packet to the client.

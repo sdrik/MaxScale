@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -870,7 +870,11 @@ HttpResponse cb_all_modules(const HttpRequest& request)
 
     if (!all_modules_loaded && request.get_option("load") == "all")
     {
-        load_all_modules();
+        if (!load_all_modules())
+        {
+            return HttpResponse(MHD_HTTP_FORBIDDEN, runtime_get_json_error());
+        }
+
         all_modules_loaded = true;
     }
 

@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -494,35 +494,6 @@ char* squeeze_whitespace(char* str)
     }
 
     return str;
-}
-
-/**
- * Strip escape characters from a character string.
- * @param String to parse.
- * @return True if parsing was successful, false on errors.
- */
-bool strip_escape_chars(char* val)
-{
-    int cur, end;
-
-    if (val == NULL)
-    {
-        return false;
-    }
-
-    end = strlen(val) + 1;
-    cur = 0;
-
-    while (cur < end)
-    {
-        if (val[cur] == '\\')
-        {
-            memmove(val + cur, val + cur + 1, end - cur - 1);
-            end--;
-        }
-        cur++;
-    }
-    return true;
 }
 
 bool configure_network_socket(int so, int type)

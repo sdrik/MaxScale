@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -71,6 +71,16 @@ public:
      * @return String representation of the object
      */
     std::string to_string();
+
+    /**
+     * @brief Get the protocol command of the session command
+     *
+     * @return The protocol command of the session command
+     */
+    uint8_t command() const
+    {
+        return m_command;
+    }
 
     /**
      * @brief Equality comparison

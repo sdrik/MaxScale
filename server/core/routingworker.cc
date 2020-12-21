@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -489,12 +489,12 @@ void RoutingWorker::delete_zombies()
 
         if (can_close)
         {
-            MXS_DEBUG("Ready to close session %lu", pDcb->session()->id());
+            MXS_DEBUG("Ready to close session %lu", pDcb->session() ? pDcb->session()->id() : 0);
             DCB::Manager::call_destroy(pDcb);
         }
         else
         {
-            MXS_DEBUG("Delaying destruction of session %lu", pDcb->session()->id());
+            MXS_DEBUG("Delaying destruction of session %lu", pDcb->session() ? pDcb->session()->id() : 0);
             slow_zombies.push_back(pDcb);
         }
     }
@@ -551,9 +551,25 @@ BackendDCB* RoutingWorker::get_backend_dcb_from_pool(SERVER* pS,
 
     while (!pDcb && !persistent_entries.empty())
     {
-        pDcb = persistent_entries.front().release_dcb();
-        persistent_entries.pop_front();
-        mxb::atomic::add(&pServer->pool_stats().n_persistent, -1);
+        for (auto it = persistent_entries.begin(); it != persistent_entries.end(); ++it)
+        {
+            // If proxy protocol is in use, we can only use DCBs that were
+            // opened by a client from the same host.
+            if (!pServer->proxy_protocol() || it->dcb()->client_remote() == pSession->client_remote())
+            {
+                pDcb = it->release_dcb();
+                persistent_entries.erase(it);
+                mxb::atomic::add(&pServer->pool_stats().n_persistent, -1);
+                break;
+            }
+        }
+
+        // If proxy protocol is in use there is a possibility that 
+        // no DCBs are suitable to use. 
+        if (!pDcb)
+        {
+            break;		
+        }
 
         // Put back the origininal handler.
         pDcb->set_handler(pDcb->protocol());

@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -18,7 +18,6 @@
 
 #include "rpl_event.hh"
 #include "parser.hh"
-#include "master_config.hh"
 #include "pinloki.hh"
 #include "reader.hh"
 
@@ -47,7 +46,7 @@ public:
     void start_slave() override;
     void stop_slave() override;
     void reset_slave() override;
-    void show_slave_status() override;
+    void show_slave_status(bool all) override;
     void show_master_status() override;
     void show_binlogs() override;
     void show_variables(const std::string& like) override;

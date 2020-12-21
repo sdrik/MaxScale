@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -35,8 +35,8 @@ void run(TestConnections& test)
     MYSQL* pMysql = mysql_init(NULL);
     test.expect(pMysql, "Could not create MYSQL handle.");
 
-    const char* zUser = test.maxscales->user_name;
-    const char* zPassword = test.maxscales->password;
+    const char* zUser = test.maxscales->user_name.c_str();
+    const char* zPassword = test.maxscales->password.c_str();
     int port = test.maxscales->rwsplit_port[0];
 
     if (mysql_real_connect(pMysql,
@@ -68,6 +68,8 @@ void run(TestConnections& test)
     {
         test.expect(false, "Could not connect to MaxScale.");
     }
+
+    mysql_close(pMysql);
 }
 }
 

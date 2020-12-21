@@ -22,7 +22,7 @@ mkdir -p $HOME/${mdbci_config_name}_vms
 export provider=`mdbci show provider $box --silent 2> /dev/null`
 export backend_box=${backend_box:-"centos_7_"$provider}
 
-mdbci destroy test_vm
+mdbci destroy --force test_vm
 
 cp ${script_dir}/test_vm.json $HOME/${mdbci_config_name}_vms/
 test_vm_box="ubuntu_bionic_"$provider
@@ -61,8 +61,8 @@ test_env_list=(
     "target"
     "box"
     "backend_box"
-    "clustrix_box"
     "columnstore_box"
+    "xpand_box"
     "product"
     "version"
     "do_not_destroy_vm"
@@ -94,7 +94,10 @@ scp -i $key $sshopt test_env $me@$ip:~/
 ssh -i $key $sshopt $me@$ip "sudo usermod --shell /bin/bash $me"
 ssh -i $key $sshopt $me@$ip "./MaxScale/BUILD/install_test_build_deps.sh"
 ssh -i $key $sshopt $me@$ip ". ./test_env; env; ./MaxScale/system-test/mdbci/run_test.sh"
-
+if [ $? != 0 ] ; then
+    echo "Tests execution FAILED! exiting"
+    exit 1
+fi
 
 . ${script_dir}/configure_log_dir.sh
 mkdir -p LOGS
@@ -106,8 +109,8 @@ cp core.* ${logs_publish_dir}
 ${script_dir}/copy_logs.sh
 
 if [ "${do_not_destroy_vm}" != "yes" ] ; then
-	mdbci destroy ${mdbci_config_name}
-        mdbci destroy test_vm
+	mdbci destroy --force ${mdbci_config_name}
+        mdbci destroy --force test_vm
         rm -rf $HOME/${mdbci_config_name}_vms
 	echo "clean up done!"
 fi

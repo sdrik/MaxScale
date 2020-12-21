@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -87,7 +87,7 @@ int test(bool success, const char* zHost, const char* zUser, const char* zPasswo
 
     MYSQL* pMysql = mysql_init(NULL);
 
-    MYSQL* pConn = mxs_mysql_real_connect(pMysql, &server, zUser, zPassword);
+    MYSQL* pConn = mxs_mysql_real_connect(pMysql, &server, server.port(), zUser, zPassword);
 
     if (pConn)
     {

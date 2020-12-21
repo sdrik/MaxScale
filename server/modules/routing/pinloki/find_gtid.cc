@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -30,12 +30,12 @@ bool search_file(const std::string& file_name,
                  GtidPosition* pos,
                  bool search_in_file);
 
-GtidPosition find_gtid_position(const maxsql::Gtid& gtid, const Inventory* inv)
+GtidPosition find_gtid_position(const maxsql::Gtid& gtid, const InventoryReader& inv)
 {
     // Simple linear search. If there can be a lot of files, make this a binary search, or
     // if it really becomes slow, create an index
     GtidPosition pos;
-    const auto& file_names = inv->file_names();
+    const auto& file_names = inv.file_names();
 
     // Search in reverse because the gtid is likely be one of the latest files, and
     // the search can stop as soon as the gtid is greater than the gtid list in the file,
@@ -115,14 +115,15 @@ bool search_file(const std::string& file_name,
         return false;
     }
 
+
+    enum GtidListResult {NotFound, GtidInThisFile, GtidInPriorFile};
+    GtidListResult result = NotFound;
     long file_pos = PINLOKI_MAGIC.size();
 
-    // If this is the first file, skip gtid-list search as there might not be a gtid-list
-    bool found_file = first_file;
-
-    while (!found_file)
+    while (result == NotFound)
     {
         maxsql::RplEvent rpl = maxsql::read_event(file, &file_pos);
+
         if (rpl.is_empty())
         {
             break;
@@ -132,37 +133,57 @@ bool search_file(const std::string& file_name,
         {
             maxsql::GtidListEvent event = rpl.gtid_list();
 
-            if (event.gtid_list.gtids().empty())
+            uint32_t highest_seq = 0;
+            bool domain_in_list = false;
+
+            for (const auto& tid : event.gtid_list.gtids())
             {
-                found_file = true;          // Possibly found file
-            }
-            else
-            {
-                for (const auto& tid : event.gtid_list.gtids())
+                if (tid.domain_id() == gtid.domain_id())
                 {
-                    if (tid.domain_id() == gtid.domain_id()
-                        && tid.sequence_nr() < gtid.sequence_nr())
-                    {
-                        // The gtid should be in this file, unless the master has rebooted,
-                        // in which case there can be several files with the same gtid list.
-                        found_file = true;
-                    }
+                    domain_in_list = true;
+                    highest_seq = std::max(highest_seq, tid.sequence_nr());
                 }
             }
+
+            if (!domain_in_list || (domain_in_list && highest_seq < gtid.sequence_nr()))
+            {
+                result = GtidInThisFile;
+            }
+            else if (highest_seq == gtid.sequence_nr())
+            {
+                result = GtidInPriorFile;
+            }
         }
     }
 
-    long gtid_pos = 0;
-    if (found_file)
+    bool success = false;
+
+    // The first file does not necessarily have a GtidList
+    if ((result == NotFound && first_file) || result == GtidInThisFile)
     {
-        gtid_pos = search_gtid_in_file(file, file_pos, gtid);
-        if (gtid_pos)
+        if (result == NotFound)
         {
+            file_pos = PINLOKI_MAGIC.size();
+        }
+
+        file.clear();
+        file_pos = search_gtid_in_file(file, file_pos, gtid);
+        if (file_pos)
+        {
+            success = true;
             ret_pos->file_name = file_name;
-            ret_pos->file_pos = gtid_pos;
+            ret_pos->file_pos = file_pos;
         }
     }
+    else if (result == GtidInPriorFile)
+    {
+        // The gtid is in a prior log file, and the caller
+        // already has it.
+        success = true;
+        ret_pos->file_name = file_name;
+        ret_pos->file_pos = file_pos;
+    }
 
-    return gtid_pos;
+    return success;
 }
 }

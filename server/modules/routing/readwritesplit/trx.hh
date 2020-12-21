@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -19,6 +19,7 @@
 #include <maxscale/buffer.hh>
 #include <maxscale/utils.hh>
 #include <maxscale/modutil.hh>
+#include <maxscale/protocol/mariadb/rwbackend.hh>
 
 // A transaction
 class Trx
@@ -29,7 +30,18 @@ public:
 
     Trx()
         : m_size(0)
+        , m_target(nullptr)
     {
+    }
+
+    mxs::RWBackend* target() const
+    {
+        return m_target;
+    }
+
+    void set_target(mxs::RWBackend* tgt)
+    {
+        m_target = tgt;
     }
 
     /**
@@ -37,7 +49,7 @@ public:
      *
      * @param buf Statement to add
      */
-    void add_stmt(GWBUF* buf)
+    void add_stmt(mxs::RWBackend* target, GWBUF* buf)
     {
         mxb_assert_message(buf, "Trx::add_stmt: Buffer must not be empty");
 
@@ -48,6 +60,8 @@ public:
 
         m_size += gwbuf_length(buf);
         m_log.emplace_back(buf);
+
+        mxb_assert(target == m_target);
     }
 
     /**
@@ -134,6 +148,7 @@ public:
         m_checksum.reset();
         m_log.clear();
         m_size = 0;
+        m_target = nullptr;
     }
 
     /**
@@ -152,4 +167,5 @@ private:
     mxs::SHA1Checksum m_checksum;   /**< Checksum of the transaction */
     TrxLog            m_log;        /**< The transaction contents */
     size_t            m_size;       /**< Transaction size in bytes */
+    mxs::RWBackend*   m_target;     /**< The target on which the transaction is done */
 };

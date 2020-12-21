@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -1585,7 +1585,8 @@ void MariaDBMonitor::check_cluster_operations_support()
         if (server->is_usable())
         {
             auto& info = server->server->info();
-            if (info.type() != ServerType::MARIADB || !server->m_capabilities.gtid)
+            auto type = info.type();
+            if ((type != ServerType::MARIADB && type != ServerType::BLR) || !server->m_capabilities.gtid)
             {
                 supported = false;
                 auto reason = string_printf("The version of '%s' (%s) is not supported. Failover/switchover "

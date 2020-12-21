@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -3124,7 +3124,7 @@ static bool handle_debug_args(char* args)
         size_t total_len = 1;
         for (int i = 0; debug_arguments[i].action != NULL; i++)
         {
-            total_len += strlen(debug_arguments[i].name) + 1;
+            total_len += strlen(debug_arguments[i].name) + 2;
         }
         char arglist[total_len];
         arglist[0] = '\0';

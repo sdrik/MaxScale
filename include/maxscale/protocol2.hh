@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -185,6 +185,18 @@ public:
         // Should not be called for non-supported protocols.
         mxb_assert(!true);
     }
+
+    /**
+     * Called when the session starts to stop
+     *
+     * This can be used to do any preparatory work that needs to be done before the actual shutdown is
+     * started. At this stage the session is still valid and routing works normally.
+     *
+     * The default implementation does nothing.
+     */
+    virtual void kill()
+    {
+    }
 };
 
 /**
@@ -307,6 +319,8 @@ public:
     virtual void set_backends(const std::vector<SERVER*>& backends) = 0;
 
     virtual void set_union_over_backends(bool union_over_backends) = 0;
+
+    virtual void set_strip_db_esc(bool strip_db_esc) = 0;
 
     /**
      * Which protocol this manager can be used with. Currently, it's assumed that the user data managers

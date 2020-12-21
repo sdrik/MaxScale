@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -86,6 +86,8 @@ public:
         std::string name;       /**< Event name in <database.name> form */
         std::string definer;    /**< Definer of the event */
         std::string status;     /**< Status of the event */
+        std::string charset;    /**< character_set_client-field */
+        std::string collation;  /**< collation_connection-field */
     };
 
     enum class BinlogMode

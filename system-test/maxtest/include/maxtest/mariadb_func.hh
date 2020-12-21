@@ -254,6 +254,13 @@ Result get_result(MYSQL* conn, std::string sql);
 
 int get_int_version(std::string version);
 
+/**
+ * @brief get_str_version Extract version number from full version string
+ * @param version
+ * @return MariaDB version in xx.xx.xx format
+ */
+std::string get_str_version(std::string version);
+
 // Helper class for performing queries
 class Connection
 {
@@ -290,6 +297,8 @@ public:
 
     Connection& operator=(Connection&& rhs)
     {
+        disconnect();
+
         m_host = std::move(rhs.m_host);
         m_port = std::move(rhs.m_port);
         m_user = std::move(rhs.m_user);
@@ -391,9 +400,29 @@ public:
         m_db = db;
     }
 
+    void set_timeout(int timeout)
+    {
+        m_timeout = timeout;
+    }
+
     uint32_t thread_id() const
     {
         return mysql_thread_id(m_conn);
+    }
+
+    std::string host() const
+    {
+        return m_host;
+    }
+
+    int port() const
+    {
+        return m_port;
+    }
+
+    MYSQL_STMT* stmt()
+    {
+        return mysql_stmt_init(m_conn);
     }
 
 private:
@@ -403,5 +432,6 @@ private:
     std::string m_pw;
     std::string m_db;
     bool        m_ssl;
+    int         m_timeout = 0;
     MYSQL*      m_conn = nullptr;
 };

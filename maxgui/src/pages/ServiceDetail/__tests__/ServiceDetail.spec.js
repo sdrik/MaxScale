@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -92,11 +92,6 @@ const shallowMountOptions = {
     computed: defaultComputed,
 }
 
-const mountOptions = {
-    shallow: false,
-    component: ServiceDetail,
-    computed: defaultComputed,
-}
 describe('ServiceDetail index', () => {
     let wrapper, axiosGetStub, axiosPatchStub
 
@@ -199,7 +194,7 @@ describe('ServiceDetail index', () => {
 
     describe('Props passes to child components test assertions', () => {
         before(() => {
-            wrapper = mount(mountOptions)
+            wrapper = mount(shallowMountOptions)
             sinon.stub(wrapper.vm, 'fetchConnectionsAndSession').returns(
                 Promise.resolve({
                     data: {},
@@ -324,7 +319,7 @@ describe('ServiceDetail index', () => {
         const ALL_RELATIONSHIP_TABLES = ['servers', 'filters', 'listeners']
 
         beforeEach(() => {
-            wrapper = mount(mountOptions)
+            wrapper = mount(shallowMountOptions)
             sinon.stub(wrapper.vm, 'fetchConnectionsAndSession').returns(
                 Promise.resolve({
                     data: {},
@@ -447,7 +442,6 @@ describe('ServiceDetail index', () => {
                             tableRowStub = [
                                 {
                                     id: 'filter_0',
-                                    index: 0,
                                     type,
                                 },
                             ]

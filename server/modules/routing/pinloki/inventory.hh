@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -14,73 +14,68 @@
 #pragma once
 #include "gtid.hh"
 
+#include <maxbase/exception.hh>
+
 #include <string>
 #include <vector>
 #include <mutex>
+#include <atomic>
 
 #include "config.hh"
 
 
 namespace pinloki
 {
+DEFINE_EXCEPTION(BinlogWriteError);
 
 /**
- * @brief Simple MonoState to keep track of binlog Files. This maintains the same
- *        index file (default name binlog.index) as the server.
+ * @brief List of binlog file names. Thread safe, writable inventory file.
  */
-class Inventory
+class InventoryWriter
 {
 public:
-    Inventory(const Config& config);
+    InventoryWriter(const Config& config);
+    InventoryWriter(const InventoryWriter&) = delete;
+    InventoryWriter& operator=(const InventoryWriter&) = delete;
 
-    // Adds a file to the inventory
-    void add(const std::string& file_name);
+    /**
+     * @brief push a file name to the end of the list
+     * @param file_name
+     */
+    void push_back(const std::string& file_name);
 
-    // Removes a file from the inventory (the file itself is not removed)
-    void remove(const std::string& file_name);
+    /**
+     * @brief pop the first file
+     * @param file_name must match the name of the first file
+     */
+    void pop_front(const std::string& file_name);
 
+    /**
+     * @brief file_names
+     * @return the file names
+     */
     std::vector<std::string> file_names() const;
 
-    int count() const;
+    /** The replication state */
+    void             save_rpl_state(const maxsql::GtidList& gtids);
+    maxsql::GtidList rpl_state() const;
 
+    /** Requested replication state (set global gtid_slave_pos='a-b-c') */
+    void             save_requested_rpl_state(const maxsql::GtidList& gtids);
+    void             clear_requested_rpl_state() const;
+    maxsql::GtidList requested_rpl_state() const;
 
-    // Return an fstream positioned at the
-    // indicated gtid event. If the gtid is not found,
-    // <returned_file>.isgood() == false (and tellg()==0).
-    std::fstream find_gtid(const maxsql::Gtid& gtid) const;
+    /** Set by the writer **/
+    void set_master_id(int64_t id);
 
-    /**
-     * @brief is_listed
-     * @param file_name
-     * @return true if file is listed in inventory
-     */
-    bool is_listed(const std::string& file_name) const;
+    /** Last known master ID */
+    int64_t master_id() const;
 
-    /**
-     * @brief exists -
-     * @param file_name
-     * @return true if is_listed(), file exists and is readable.
-     */
-    bool exists(const std::string& file_name) const;
+    /** Is the writer connected */
+    void set_is_writer_connected(bool connected);
 
-    /**
-     * @brief The first file in the inventory
-     * @return First file name or empty string
-     */
-    std::string first() const;
-
-    /**
-     * @brief The last file in the inventory
-     * @return Last file name or empty string
-     */
-    std::string last() const;
-
-    /**
-     * @brief next - next file in inventory
-     * @param file_name
-     * @return the next file in the inventory or an empty string
-     */
-    std::string next(const std::string& file_name) const;
+    /** Is the writer connected */
+    bool is_writer_connected() const;
 
     const Config& config() const
     {
@@ -88,13 +83,47 @@ public:
     }
 
 private:
+    // Read or re-read the file
+    void read_file() const;
+
     // Saves the file list on disk
     void persist();
 
     // The configuration used to create this inventory
     const Config& m_config;
 
-    std::vector<std::string> m_file_names;
-    mutable std::mutex       m_mutex;
+    mutable std::mutex               m_mutex;
+    mutable std::vector<std::string> m_file_names;
+    std::atomic<int64_t>             m_master_id {0};
+    std::atomic<bool>                m_is_writer_connected {false};
 };
+
+/**
+ * @brief List of binlog file names for single-threaded readers, in
+ *        any process.
+ */
+class InventoryReader
+{
+public:
+    InventoryReader(const Config& config);
+    const std::vector<std::string>& file_names() const;
+    maxsql::GtidList                rpl_state() const;
+
+    const Config& config() const
+    {
+        return m_config;
+    }
+
+private:
+    // The configuration used to create this inventory
+    const Config&                    m_config;
+    mutable std::vector<std::string> m_file_names;
+};
+
+// Return the string after str in a vector of unique strings, or empty if not found
+std::string next_string(const std::vector<std::string>& strs, const std::string& str);
+// Return the first string in vector or an empty string if the vector is empty
+std::string first_string(const std::vector<std::string>& strs);
+// Return the last string in vector or an empty string if the vector is empty
+std::string last_string(const std::vector<std::string>& strs);
 }

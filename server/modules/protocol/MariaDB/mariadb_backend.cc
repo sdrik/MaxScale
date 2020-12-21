@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -289,7 +289,7 @@ void MariaDBBackendConnection::prepare_for_write(GWBUF* buffer)
 {
     if (!gwbuf_is_ignorable(buffer))
     {
-        track_query(buffer);
+        track_query(TrackedQuery(buffer));
     }
 
     if (gwbuf_should_collect_result(buffer))
@@ -369,8 +369,8 @@ void MariaDBBackendConnection::ready_for_reading(DCB* event_dcb)
             break;
 
         case State::SEND_DELAYQ:
-            send_delayed_packets();
             m_state = State::ROUTING;
+            send_delayed_packets();
             break;
 
         case State::ROUTING:
@@ -388,20 +388,24 @@ void MariaDBBackendConnection::ready_for_reading(DCB* event_dcb)
 
 void MariaDBBackendConnection::do_handle_error(DCB* dcb, const std::string& errmsg, mxs::ErrorType type)
 {
-    std::ostringstream ss(errmsg);
+    std::ostringstream ss(errmsg, std::ios_base::app);
+
+    ss << " (" << m_server.name();
 
     if (int err = gw_getsockerrno(dcb->fd()))
     {
-        ss << " (" << err << ", " << mxs_strerror(err) << ")";
+        ss << ": " << err << ", " << mxs_strerror(err);
     }
     else if (dcb->is_fake_event())
     {
         // Fake events should not have TCP socket errors
-        ss << " (Generated event)";
+        ss << ": Generated event";
     }
 
+    ss << ")";
+
     mxb_assert(!dcb->hanged_up());
-    GWBUF* errbuf = mysql_create_custom_error(1, 0, 2003, ss.str().c_str());
+    GWBUF* errbuf = mysql_create_custom_error(1, 0, ER_CONNECTION_KILLED, ss.str().c_str());
 
     if (!m_upstream->handleError(type, errbuf, nullptr, m_reply))
     {
@@ -530,8 +534,18 @@ int MariaDBBackendConnection::normal_read()
     int nbytes_read = 0;
     int return_code = 0;
 
-    /* read available backend data */
-    return_code = dcb->read(&read_buffer, 0);
+    if (m_ignore_replies)
+    {
+        // Read only one packet. This way any extra packets, which we aren't expecting, are handled normally.
+        mxs::Buffer buffer;
+        return_code = read_protocol_packet(m_dcb, &buffer);
+        read_buffer = buffer.release();
+    }
+    else
+    {
+        // Read all available data
+        return_code = dcb->read(&read_buffer, 0);
+    }
 
     if (return_code < 0)
     {
@@ -695,13 +709,6 @@ int MariaDBBackendConnection::normal_read()
         proto->m_ignore_replies--;
         mxb_assert(proto->m_ignore_replies >= 0);
         GWBUF* reply = modutil_get_next_MySQL_packet(&read_buffer);
-
-        while (read_buffer)
-        {
-            /** Skip to the last packet if we get more than one */
-            gwbuf_free(reply);
-            reply = modutil_get_next_MySQL_packet(&read_buffer);
-        }
 
         mxb_assert(reply);
         mxb_assert(!read_buffer);
@@ -984,7 +991,7 @@ int32_t MariaDBBackendConnection::write(GWBUF* queue)
                       m_dcb, m_dcb->fd(), to_string(m_state).c_str());
 
             /** Store data until authentication is complete */
-            m_delayed_packets.append(queue);
+            m_delayed_packets.emplace_back(queue);
             rc = 1;
         }
         break;
@@ -1378,7 +1385,7 @@ bool MariaDBBackendConnection::established()
 
 void MariaDBBackendConnection::ping()
 {
-    if (m_reply.state() == ReplyState::DONE)
+    if (m_reply.state() == ReplyState::DONE && m_reply.command() != MXS_COM_STMT_SEND_LONG_DATA)
     {
         MXS_INFO("Pinging '%s', idle for %ld seconds", m_server.name(), seconds_idle());
 
@@ -1394,7 +1401,15 @@ bool MariaDBBackendConnection::can_close() const
 
 int64_t MariaDBBackendConnection::seconds_idle() const
 {
-    return MXS_CLOCK_TO_SEC(mxs_clock() - std::max(m_dcb->last_read(), m_dcb->last_write()));
+    int64_t idle = 0;
+
+    // Only treat the connection as idle if there's no buffered data
+    if (!m_dcb->writeq() && !m_dcb->readq())
+    {
+        idle = MXS_CLOCK_TO_SEC(mxs_clock() - std::max(m_dcb->last_read(), m_dcb->last_write()));
+    }
+
+    return idle;
 }
 
 json_t* MariaDBBackendConnection::diagnostics() const
@@ -1812,6 +1827,11 @@ GWBUF* MariaDBBackendConnection::process_packets(GWBUF** result)
         }
 
         it = end;
+
+        if (m_reply.state() == ReplyState::DONE)
+        {
+            break;
+        }
     }
 
     buffer.release();
@@ -1828,6 +1848,20 @@ void MariaDBBackendConnection::process_one_packet(Iter it, Iter end, uint32_t le
         break;
 
     case ReplyState::DONE:
+
+        while (!m_track_queue.empty())
+        {
+            track_query(m_track_queue.front());
+            m_track_queue.pop();
+
+            if (m_reply.state() != ReplyState::DONE)
+            {
+                // There's another reply waiting to be processed, start processing it.
+                process_one_packet(it, end, len);
+                return;
+            }
+        }
+
         if (cmd == MYSQL_REPLY_ERR)
         {
             update_error(++it, end);
@@ -2092,8 +2126,17 @@ void MariaDBBackendConnection::process_result_start(Iter it, Iter end)
         break;
 
     case MYSQL_REPLY_EOF:
-        // EOF packets are never expected as the first response unless changing user.
-        mxb_assert(m_changing_user);
+        // EOF packets are never expected as the first response unless changing user. For some reason the
+        // server also responds with a EOF packet to COM_SET_OPTION even though, according to documentation,
+        // it should respond with an OK packet.
+        if (m_reply.command() == MXS_COM_SET_OPTION)
+        {
+            set_reply_state(ReplyState::DONE);
+        }
+        else
+        {
+            mxb_assert(m_changing_user);
+        }
         break;
 
     default:
@@ -2140,17 +2183,30 @@ void MariaDBBackendConnection::assign_session(MXS_SESSION* session, mxs::Compone
     m_authenticator = client_data->m_current_authenticator->create_backend_authenticator(m_auth_data);
 }
 
+MariaDBBackendConnection::TrackedQuery::TrackedQuery(GWBUF* buffer)
+    : payload_len(MYSQL_GET_PAYLOAD_LEN(GWBUF_DATA(buffer)))
+    , command(MYSQL_GET_COMMAND(GWBUF_DATA(buffer)))
+{
+    mxb_assert(gwbuf_is_contiguous(buffer));
+
+    if (command == MXS_COM_STMT_EXECUTE)
+    {
+        // Extract the flag byte after the statement ID
+        uint8_t flags = GWBUF_DATA(buffer)[MYSQL_PS_ID_OFFSET + MYSQL_PS_ID_SIZE];
+
+        // Any non-zero flag value means that we have an open cursor
+        opening_cursor = flags != 0;
+    }
+}
+
 /**
  * Track a client query
  *
  * Inspects the query and tracks the current command being executed. Also handles detection of
  * multi-packet requests and the special handling that various commands need.
  */
-void MariaDBBackendConnection::track_query(GWBUF* buffer)
+void MariaDBBackendConnection::track_query(const TrackedQuery& query)
 {
-    mxb_assert(gwbuf_is_contiguous(buffer));
-    uint8_t* data = GWBUF_DATA(buffer);
-
     if (m_changing_user)
     {
         // User reauthentication in progress, ignore the contents
@@ -2159,7 +2215,7 @@ void MariaDBBackendConnection::track_query(GWBUF* buffer)
 
     if (session_is_load_active(m_session))
     {
-        if (MYSQL_GET_PAYLOAD_LEN(data) == 0)
+        if (query.payload_len == 0)
         {
             MXS_INFO("Load data ended");
             session_set_load_active(m_session, false);
@@ -2168,8 +2224,14 @@ void MariaDBBackendConnection::track_query(GWBUF* buffer)
     }
     else if (!m_large_query)
     {
+        if (m_reply.state() != ReplyState::DONE)
+        {
+            m_track_queue.push(query);
+            return;
+        }
+
         m_reply.clear();
-        m_reply.set_command(MYSQL_GET_COMMAND(data));
+        m_reply.set_command(query.command);
 
         if (mxs_mysql_command_will_respond(m_reply.command()))
         {
@@ -2178,11 +2240,7 @@ void MariaDBBackendConnection::track_query(GWBUF* buffer)
 
         if (m_reply.command() == MXS_COM_STMT_EXECUTE)
         {
-            // Extract the flag byte after the statement ID
-            uint8_t flags = data[MYSQL_PS_ID_OFFSET + MYSQL_PS_ID_SIZE];
-
-            // Any non-zero flag value means that we have an open cursor
-            m_opening_cursor = flags != 0;
+            m_opening_cursor = query.opening_cursor;
         }
         else if (m_reply.command() == MXS_COM_STMT_FETCH)
         {
@@ -2195,7 +2253,7 @@ void MariaDBBackendConnection::track_query(GWBUF* buffer)
      * byte extraction for the next packet. This way current_command always
      * contains the latest command executed on this backend.
      */
-    m_large_query = MYSQL_GET_PAYLOAD_LEN(data) == MYSQL_PACKET_LENGTH_MAX;
+    m_large_query = query.payload_len == MYSQL_PACKET_LENGTH_MAX;
 }
 
 MariaDBBackendConnection::~MariaDBBackendConnection()
@@ -2443,15 +2501,20 @@ MariaDBBackendConnection::StateMachineRes MariaDBBackendConnection::authenticate
 
 bool MariaDBBackendConnection::send_delayed_packets()
 {
-    if (!m_delayed_packets.empty())
+    bool rval = true;
+
+    for (auto& b : m_delayed_packets)
     {
-        m_delayed_packets.make_contiguous();
-        /** Send the queued commands to the backend */
-        GWBUF* buffer = m_delayed_packets.release();
-        prepare_for_write(buffer);
-        backend_write_delayqueue(buffer);
+        if (!write(b.release()))
+        {
+            rval = false;
+            break;
+        }
     }
-    return false;
+
+    m_delayed_packets.clear();
+
+    return rval;
 }
 
 MariaDBBackendConnection::StateMachineRes MariaDBBackendConnection::send_connection_init_queries()

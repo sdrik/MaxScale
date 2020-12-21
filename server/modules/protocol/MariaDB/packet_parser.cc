@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -86,7 +86,7 @@ ClientInfo parse_client_capabilities(ByteVec& data, const ClientInfo* old_info)
     {
         // We don't support COM_MULTI or progress reporting. The former is not used and the latter requires
         // some extra work to implement correctly.
-        rval.m_extra_capabilities |= (mariadb::get_byte4(ptr) & MXS_EXTRA_CAPABILITIES_SERVER);
+        rval.m_extra_capabilities = (mariadb::get_byte4(ptr) & MXS_EXTRA_CAPABILITIES_SERVER);
     }
     ptr += 4;
     pop_front(data, ptr - data.data());

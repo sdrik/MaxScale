@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -158,6 +158,7 @@ DCB::DCB(int fd,
     , m_uid(this_unit.uid_generator.fetch_add(1, std::memory_order_relaxed))
     , m_fd(fd)
     , m_remote(remote)
+    , m_client_remote(session->client_remote())
     , m_role(role)
     , m_session(session)
     , m_handler(handler)
@@ -570,9 +571,9 @@ int DCB::log_errors_SSL(int ret)
     }
     if (ret || ssl_errno)
     {
-        MXS_ERROR("SSL operation failed, dcb %p in state "
+        MXS_ERROR("SSL operation failed, %s in state "
                   "%s fd %d return code %d. More details may follow.",
-                  this,
+                  mxs::to_string(m_role),
                   mxs::to_string(m_state),
                   m_fd,
                   ret);

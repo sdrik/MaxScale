@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -32,7 +32,7 @@
 #define MYSQL_CHARSET_OFFSET    12
 #define MYSQL_CLIENT_CAP_OFFSET 4
 #define MYSQL_CLIENT_CAP_SIZE   4
-#define MARIADB_CAP_OFFSET      MYSQL_CHARSET_OFFSET + 19
+#define MARIADB_CAP_OFFSET      MYSQL_CHARSET_OFFSET + 20
 
 #define GW_MYSQL_PROTOCOL_VERSION 10    // version is 10
 #define GW_MYSQL_HANDSHAKE_FILLER 0x00

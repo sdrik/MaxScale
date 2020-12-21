@@ -265,12 +265,17 @@
         "labels" : [
                 "GALERA_BACKEND"
         ],
-        "product" : {
-                "name": "galera",
-                "version": "${galera_version}",
-                "cnf_template" : "galera_server1.cnf",
-                "cnf_template_path": "${cnf_path}"
-        }
+        "products" : [
+                {
+                        "name": "${product}",
+                        "version": "${version}"
+                },
+                {
+                        "name": "galera_config",
+                        "cnf_template" : "galera_server1.cnf"
+                }
+        ],
+        "cnf_template_path": "${cnf_path}"
   },
 
   "galera_001" :
@@ -282,12 +287,17 @@
         "labels" : [
                 "GALERA_BACKEND"
         ],
-        "product" : {
-                "name": "galera",
-                "version": "${galera_version}",
-                "cnf_template" : "galera_server2.cnf",
-                "cnf_template_path": "${cnf_path}"
-        }
+        "products" : [
+                {
+                        "name": "${product}",
+                        "version": "${version}"
+                },
+                {
+                        "name": "galera_config",
+                        "cnf_template" : "galera_server2.cnf"
+                }
+        ],
+        "cnf_template_path": "${cnf_path}"
   },
 
   "galera_002" :
@@ -299,12 +309,17 @@
         "labels" : [
                 "GALERA_BACKEND"
         ],
-        "product" : {
-                "name": "galera",
-                "version": "${galera_version}",
-                "cnf_template" : "galera_server3.cnf",
-                "cnf_template_path": "${cnf_path}"
-        }
+        "products" : [
+                {
+                        "name": "${product}",
+                        "version": "${version}"
+                },
+                {
+                        "name": "galera_config",
+                        "cnf_template" : "galera_server3.cnf"
+                }
+        ],
+        "cnf_template_path": "${cnf_path}"
   },
 
   "galera_003" :
@@ -316,12 +331,17 @@
         "labels" : [
                 "GALERA_BACKEND"
         ],
-        "product" : {
-                "name": "galera",
-                "version": "${galera_version}",
-                "cnf_template" : "galera_server4.cnf",
-                "cnf_template_path": "${cnf_path}"
-        }
+        "products" : [
+                {
+                        "name": "${product}",
+                        "version": "${version}"
+                },
+                {
+                        "name": "galera_config",
+                        "cnf_template" : "galera_server4.cnf"
+                }
+        ],
+        "cnf_template_path": "${cnf_path}"
   },
 
   "maxscale_000" :
@@ -356,47 +376,63 @@
 
   },
 
-  "clustrix_000" :
+  "xpand_000" :
   {
-        "hostname" : "clustrix000",
-        "box" : "${clustrix_box}",
+        "hostname" : "xpand000",
+        "box" : "${xpand_box}",
         "memory_size" : "16192",
         "labels" : [
-                "CLUSTRIX_BACKEND"
-        ]
+                "XPAND_BACKEND"
+        ],
+        "product" : {
+                "name" : "clustrix",
+                "version" : "latest"
+        }
   },
 
-  "clustrix_001" :
+  "xpand_001" :
   {
-        "hostname" : "clustrix001",
-        "box" : "${clustrix_box}",
+        "hostname" : "xpand001",
+        "box" : "${xpand_box}",
         "memory_size" : "16192",
         "labels" : [
-                "CLUSTRIX_BACKEND"
-        ]
+                "XPAND_BACKEND"
+        ],
+        "product" : {
+                "name" : "clustrix",
+                "version" : "latest"
+        }
   },
 
-  "clustrix_002" :
+  "xpand_002" :
   {
-        "hostname" : "clustrix002",
-        "box" : "${clustrix_box}",
+        "hostname" : "xpandx002",
+        "box" : "${xpand_box}",
         "memory_size" : "16192",
         "labels" : [
-                "CLUSTRIX_BACKEND"
-        ]
+                "XPAND_BACKEND"
+        ],
+        "product" : {
+                "name" : "clustrix",
+                "version" : "latest"
+        }
   },
 
-  "clustrix_003" :
+  "xpand_003" :
   {
-        "hostname" : "clustrix003",
+        "hostname" : "xpand003",
         "memory_size" : "16192",
-        "box" : "${clustrix_box}",
+        "box" : "${xpand_box}",
         "labels" : [
-                "CLUSTRIX_BACKEND"
-        ]
+                "XPAND_BACKEND"
+        ],
+        "product" : {
+                "name" : "clustrix",
+                "version" : "latest"
+        }
   },
-
-  "columnstore_000" :
+  
+   "columnstore_000" :
   {
         "hostname" : "columnstore000",
         "box" : "${columnstore_box}",
@@ -457,5 +493,5 @@
         "labels" : [
                 "COLUMNSTORE_BACKEND"
         ]
-  }
+    }    
 }

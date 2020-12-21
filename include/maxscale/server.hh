@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -52,7 +52,7 @@ public:
             UNKNOWN,    /**< Not connected yet */
             MYSQL,      /**< MySQL 5.5 or later. */
             MARIADB,    /**< MariaDB 5.5 or later */
-            CLUSTRIX,   /**< Clustrix node */
+            XPAND,      /**< Xpand node */
             BLR         /**< Binlog router */
         };
 
@@ -251,7 +251,7 @@ public:
     virtual void set_replication_lag(int64_t lag) = 0;
 
     // TODO: Don't expose this to the modules and instead destroy the server
-    //       via ServerManager (currently needed by clustrixmon)
+    //       via ServerManager (currently needed by xpandmon)
     virtual void deactivate() = 0;
 
     /**

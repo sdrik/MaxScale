@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -50,6 +50,13 @@ GWBUF* create_select_master_error()
         1, 0, 1198, "HY000",
         "Manual master configuration is not possible when `select_master=true` is used.");
 }
+
+GWBUF* create_change_master_error(const std::string& err)
+{
+    return modutil_create_mysql_err_msg(
+        1, 0, 1198, "HY000",
+        err.c_str());
+}
 }
 
 namespace pinloki
@@ -93,7 +100,7 @@ int32_t PinlokiSession::routeQuery(GWBUF* pPacket)
                 };
 
             m_reader = std::make_unique<Reader>(
-                cb, m_router->inventory(),
+                cb, m_router->inventory()->config(),
                 mxs::RoutingWorker::get_current(),
                 m_gtid, std::chrono::seconds(m_heartbeat_period));
             rval = 1;
@@ -112,7 +119,7 @@ int32_t PinlokiSession::routeQuery(GWBUF* pPacket)
     case MXS_COM_QUERY:
         {
             auto sql = mxs::extract_sql(buf.get());
-            MXS_INFO("COM_QUERY: %s", sql.c_str());
+            MXS_DEBUG("COM_QUERY: %s", sql.c_str());
             parser::parse(sql, this);
             rval = 1;
         }
@@ -278,38 +285,77 @@ void PinlokiSession::select(const std::vector<std::string>& fields)
 
 void PinlokiSession::set(const std::string& key, const std::string& value)
 {
+    GWBUF* buf = nullptr;
+
     if (key == "@slave_connect_state")
     {
         m_gtid = mxq::Gtid::from_string(value);
+
+        if (!m_gtid.is_valid())
+        {
+            buf = modutil_create_mysql_err_msg(1, 0, 1941, "HY000",
+                                               "Could not parse GTID list");
+        }
+        else
+        {
+            buf = modutil_create_ok();
+        }
     }
     else if (key == "@master_heartbeat_period")
     {
         m_heartbeat_period = strtol(value.c_str(), nullptr, 10) / 1000000000;
+        buf = modutil_create_ok();
     }
     else if (key == "gtid_slave_pos")
     {
-        m_router->set_gtid(mxq::GtidList::from_string(value));
+        auto gtid = mxq::GtidList::from_string(value);
+
+        if (!gtid.is_valid())
+        {
+            buf = modutil_create_mysql_err_msg(1, 0, 1941, "HY000",
+                                               "Could not parse GTID list");
+        }
+        else if (m_router->is_slave_running())
+        {
+            buf = modutil_create_mysql_err_msg(
+                1, 0, 1198, "HY000",
+                "This operation cannot be performed as you have a running slave;"
+                " run STOP SLAVE first");
+        }
+        else
+        {
+            m_router->set_gtid_slave_pos(gtid);
+            buf = modutil_create_ok();
+        }
+    }
+    else
+    {
+        MXB_SWARNING("Ignore set " << key << " = " << value);
+        buf = modutil_create_ok();
     }
 
-    send(modutil_create_ok());
+    send(buf);
 }
 
 void PinlokiSession::change_master_to(const parser::ChangeMasterValues& values)
 {
     GWBUF* buf = nullptr;
 
-    if (m_router->config().select_master())
-    {
-        buf = create_select_master_error();
-    }
-    else if (m_router->is_slave_running())
+    if (m_router->is_slave_running())
     {
         buf = create_slave_running_error();
     }
     else
     {
-        m_router->change_master(values);
-        buf = modutil_create_ok();
+        auto err_str = m_router->change_master(values);
+        if (err_str.empty())
+        {
+            buf = modutil_create_ok();
+        }
+        else
+        {
+            buf = create_change_master_error(err_str);
+        }
     }
 
     send(buf);
@@ -319,7 +365,9 @@ void PinlokiSession::start_slave()
 {
     GWBUF* buf = nullptr;
 
-    if (m_router->start_slave())
+    std::string err_str = m_router->start_slave();
+
+    if (err_str.empty())
     {
         buf = modutil_create_ok();
     }
@@ -328,9 +376,8 @@ void PinlokiSession::start_slave()
         // Slave not configured
         buf = modutil_create_mysql_err_msg(
             1, 0, 1200, "HY000",
-            "Misconfigured slave: MASTER_HOST was not set; Fix in config file or with CHANGE MASTER TO");
+            err_str.c_str());
     }
-
 
     send(buf);
 }
@@ -366,9 +413,9 @@ void PinlokiSession::reset_slave()
     send(buf);
 }
 
-void PinlokiSession::show_slave_status()
+void PinlokiSession::show_slave_status(bool all)
 {
-    send(m_router->show_slave_status());
+    send(m_router->show_slave_status(all));
 }
 
 void PinlokiSession::show_master_status()

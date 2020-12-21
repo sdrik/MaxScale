@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -38,7 +38,24 @@ enum class ChangeMasterType
     MASTER_SSL_KEY,
     MASTER_SSL_CIPHER,
     MASTER_SSL_VERIFY_SERVER_CERT,
+    // These are errors in Pinloki::change_master()
+    MASTER_LOG_FILE,
+    MASTER_LOG_POS,
+    RELAY_LOG_FILE,
+    RELAY_LOG_POS,
+    // This one is ignored, logs a warning
+    MASTER_HEARTBEAT_PERIOD,
+    // These are also errors, but with a "not supported yet" msg.
+    MASTER_BIND,
+    MASTER_CONNECT_RETRY,
+    MASTER_DELAY,
+    IGNORE_SERVER_IDS,
+    DO_DOMAIN_IDS,
+    IGNORE_DOMAIN_IDS,
+    END
 };
+
+std::string to_string(ChangeMasterType type);
 
 namespace parser
 {
@@ -54,7 +71,7 @@ struct Handler
     virtual void start_slave() = 0;
     virtual void stop_slave() = 0;
     virtual void reset_slave() = 0;
-    virtual void show_slave_status() = 0;
+    virtual void show_slave_status(bool all) = 0;
     virtual void show_master_status() = 0;
     virtual void show_binlogs() = 0;
     virtual void show_variables(const std::string& like) = 0;

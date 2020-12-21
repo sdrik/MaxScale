@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -54,13 +54,15 @@ namespace
 bool is_valid_hostname(const std::string& hn)
 {
     auto invalid_char = [](char ch) {
-            bool valid = std::isalnum(ch) || ch == '_' || ch == '.';
+            bool valid = std::isalnum(ch) || ch == '_' || ch == '.' || ch == '-';
             return !valid;
         };
 
     bool ret = std::none_of(begin(hn), end(hn), invalid_char)
         && hn.front() != '_'
-        && (hn.length() <= 253 && hn.length() > 0);
+        && hn.front() != '-'
+        && (hn.length() <= 253 && hn.length() > 0)
+        && hn.find("--") == std::string::npos;
 
     return ret;
 }

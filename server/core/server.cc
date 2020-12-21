@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -433,14 +433,44 @@ bool Server::ParamSSL::from_json(const json_t* pJson, value_type* pValue,
     return ok;
 }
 
-void Server::configure(const mxs::ConfigParameters& params)
+bool Server::configure_ssl(const mxs::ConfigParameters& params)
 {
-    m_settings.configure(params);
+    bool ok;
+    std::unique_ptr<mxs::SSLContext> ctx;
+    std::tie(ok, ctx) = create_ssl(m_name.c_str(), params);
+
+    if (ok)
+    {
+        if (ctx.get())
+        {
+            if (!m_ssl_provider.enabled())
+            {
+                m_ssl_provider.set_context(std::move(ctx));
+            }
+            else
+            {
+                MXS_ERROR("Cannot alter SSL at runtime");
+                ok = false;
+            }
+        }
+        else if (m_ssl_provider.enabled())
+        {
+            MXS_ERROR("Cannot disable SSL at runtime");
+            ok = false;
+        }
+    }
+
+    return ok;
 }
 
-void Server::configure(json_t* params)
+bool Server::configure(const mxs::ConfigParameters& params)
 {
-    m_settings.configure(params);
+    return m_settings.configure(params) && configure_ssl(params);
+}
+
+bool Server::configure(json_t* params)
+{
+    return m_settings.configure(params) && configure_ssl(mxs::ConfigParameters::from_json(params));
 }
 
 Server::Settings::Settings(const std::string& name)
@@ -497,13 +527,10 @@ std::unique_ptr<Server> Server::create(const char* name, const mxs::ConfigParame
 
     if (s_spec.validate(params))
     {
-        auto ssl = create_ssl(name, params);
-
-        if (ssl.first)
+        if (auto server = std::make_unique<Server>(name))
         {
-            if (auto server = std::make_unique<Server>(name, std::move(ssl.second)))
+            if (server->configure(params))
             {
-                server->configure(params);
                 rval = std::move(server);
             }
         }
@@ -518,13 +545,10 @@ std::unique_ptr<Server> Server::create(const char* name, json_t* json)
 
     if (s_spec.validate(json))
     {
-        auto ssl = create_ssl(name, mxs::ConfigParameters::from_json(json));
-
-        if (ssl.first)
+        if (auto server = std::make_unique<Server>(name))
         {
-            if (auto server = std::make_unique<Server>(name, std::move(ssl.second)))
+            if (server->configure(json))
             {
-                server->configure(json);
                 rval = std::move(server);
             }
         }
@@ -822,9 +846,9 @@ void Server::VersionInfo::set(uint64_t version, const std::string& version_str)
 
     Type new_type = Type::UNKNOWN;
     auto version_strz = version_str.c_str();
-    if (strcasestr(version_strz, "clustrix"))
+    if (strcasestr(version_strz, "xpand") || strcasestr(version_strz, "clustrix"))
     {
-        new_type = Type::CLUSTRIX;
+        new_type = Type::XPAND;
     }
     else if (strcasestr(version_strz, "binlogrouter"))
     {
@@ -832,7 +856,7 @@ void Server::VersionInfo::set(uint64_t version, const std::string& version_str)
     }
     else if (strcasestr(version_strz, "mariadb"))
     {
-        // Needs to be after Clustrix and BLR as their version strings may include "mariadb".
+        // Needs to be after Xpand and BLR as their version strings may include "mariadb".
         new_type = Type::MARIADB;
     }
     else if (!version_str.empty())
@@ -871,7 +895,7 @@ const char* Server::VersionInfo::version_string() const
 bool SERVER::VersionInfo::is_database() const
 {
     auto t = m_type;
-    return t == Type::MARIADB || t == Type::CLUSTRIX || t == Type::MYSQL;
+    return t == Type::MARIADB || t == Type::XPAND || t == Type::MYSQL;
 }
 
 const SERVER::VersionInfo& Server::info() const

@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -31,6 +31,11 @@ using Guard = std::lock_guard<std::mutex>;
 using maxscale::MonitorServer;
 using ConnectResult = maxscale::MonitorServer::ConnectResult;
 using namespace std::chrono_literals;
+
+namespace
+{
+const char not_a_db[] = "it is not a valid database.";
+}
 
 MariaDBServer::MariaDBServer(SERVER* server, int config_index,
                              const MonitorServer::SharedSettings& base_settings,
@@ -105,17 +110,29 @@ bool MariaDBServer::execute_cmd_ex(const string& cmd, QueryRetryMode mode,
     bool rval = false;
     if (query_success)
     {
-        MYSQL_RES* result = mysql_store_result(conn);
-        if (result == NULL)
+        // In case query was a multiquery, loop for more resultsets. Error message is produced from first
+        // non-empty resultset and does not specify the subquery.
+        string results_errmsg;
+        do
+        {
+            MYSQL_RES* result = mysql_store_result(conn);
+            if (result)
+            {
+                int cols = mysql_num_fields(result);
+                int rows = mysql_num_rows(result);
+                if (results_errmsg.empty())
+                {
+                    results_errmsg = string_printf("Query '%s' on '%s' returned %d columns and %d rows "
+                                                   "of data when none was expected.",
+                                                   cmd.c_str(), name(), cols, rows);
+                }
+            }
+        }
+        while (mysql_next_result(conn) == 0);
+
+        if (results_errmsg.empty())
         {
             rval = true;
-        }
-        else if (errmsg_out)
-        {
-            int cols = mysql_num_fields(result);
-            int rows = mysql_num_rows(result);
-            *errmsg_out = string_printf("Query '%s' on '%s' returned %d columns and %d rows of data when "
-                                        "none was expected.", cmd.c_str(), name(), cols, rows);
         }
     }
     else
@@ -231,18 +248,15 @@ bool MariaDBServer::execute_cmd_time_limit(const std::string& cmd, maxbase::Dura
 
 bool MariaDBServer::do_show_slave_status(string* errmsg_out)
 {
-    unsigned int columns = 0;
     string query;
     bool all_slaves_status = false;
     if (m_capabilities.slave_status_all)
     {
-        columns = 42;
         all_slaves_status = true;
         query = "SHOW ALL SLAVES STATUS;";
     }
     else if (m_capabilities.basic_support)
     {
-        columns = 40;
         query = "SHOW SLAVE STATUS;";
     }
     else
@@ -252,17 +266,8 @@ bool MariaDBServer::do_show_slave_status(string* errmsg_out)
     }
 
     auto result = execute_query(query, errmsg_out);
-    if (result.get() == NULL)
+    if (!result)
     {
-        return false;
-    }
-    else if (result->get_col_count() < columns)
-    {
-        MXS_ERROR("'%s' returned less than the expected amount of columns. Expected %u columns, "
-                  "got %" PRId64 ".",
-                  query.c_str(),
-                  columns,
-                  result->get_col_count());
         return false;
     }
 
@@ -859,7 +864,7 @@ void MariaDBServer::update_server_version()
     auto& info = srv->info();
     auto type = info.type();
 
-    if (type == ServerType::MARIADB || type == ServerType::MYSQL)
+    if (type == ServerType::MARIADB || type == ServerType::MYSQL || type == ServerType::BLR)
     {
         /* Not a binlog server, check version number and supported features. */
         auto& srv_version = info.version_num();
@@ -871,7 +876,8 @@ void MariaDBServer::update_server_version()
         {
             m_capabilities.basic_support = true;
             // For more specific features, at least MariaDB 10.X is needed.
-            if (type == ServerType::MARIADB && major >= 10)
+            if ((type == ServerType::MARIADB || type == ServerType::BLR)
+                && major >= 10)
             {
                 // 10.0.2 or 10.1.X or greater than 10
                 if (((minor == 0 && patch >= 2) || minor >= 1) || major > 10)
@@ -879,7 +885,10 @@ void MariaDBServer::update_server_version()
                     // Versions with gtid also support the extended slave status query.
                     m_capabilities.gtid = true;
                     m_capabilities.slave_status_all = true;
-                    m_capabilities.events = true;
+                    if (type != ServerType::BLR)
+                    {
+                        m_capabilities.events = true;
+                    }
                 }
                 // 10.1.2 (10.1.1 has limited support, not enough) or 10.2.X or greater than 10
                 if (((minor == 1 && patch >= 2) || minor >= 2) || major > 10)
@@ -888,12 +897,6 @@ void MariaDBServer::update_server_version()
                 }
             }
         }
-    }
-    else if (type == ServerType::BLR)
-    {
-        // BLR supports gtid but not "show all slaves status".
-        m_capabilities.basic_support = true;
-        m_capabilities.gtid = true;
     }
 
     if (m_capabilities.basic_support)
@@ -1032,6 +1035,10 @@ bool MariaDBServer::can_be_demoted_switchover(string* reason_out)
     {
         reason = "it is not running or it is in maintenance.";
     }
+    else if (!is_database())
+    {
+        reason = not_a_db;
+    }
     else if (!update_replication_settings(&query_error))
     {
         reason = string_printf("it could not be queried: %s", query_error.c_str());
@@ -1106,6 +1113,10 @@ bool MariaDBServer::can_be_promoted(OperationType op, const MariaDBServer* demot
     else if (!is_usable())
     {
         reason = "it is down or in maintenance.";
+    }
+    else if (!is_database())
+    {
+        reason = not_a_db;
     }
     else if (op == OperationType::SWITCHOVER && is_low_on_disk_space())
     {
@@ -1250,6 +1261,12 @@ MariaDBServer::alter_events(BinlogMode binlog_mode, const EventStatusMapper& map
     {
         if (target_events > 0)
         {
+            // Reset character set and collation.
+            string charset_errmsg;
+            if (!execute_cmd("SET NAMES latin1 COLLATE latin1_swedish_ci;", &charset_errmsg))
+            {
+                MXS_ERROR("Could not reset character set: %s", charset_errmsg.c_str());
+            }
             warn_event_scheduler();
         }
         if (target_events == events_altered)
@@ -1315,7 +1332,10 @@ bool MariaDBServer::events_foreach(EventManipulator& func, json_t** error_out)
     auto event_name_ind = event_info->get_col_index("EVENT_NAME");
     auto event_definer_ind = event_info->get_col_index("DEFINER");
     auto event_status_ind = event_info->get_col_index("STATUS");
-    mxb_assert(db_name_ind > 0 && event_name_ind > 0 && event_definer_ind > 0 && event_status_ind > 0);
+    auto charset_ind = event_info->get_col_index("CHARACTER_SET_CLIENT");
+    auto collation_ind = event_info->get_col_index("COLLATION_CONNECTION");
+    mxb_assert(db_name_ind > 0 && event_name_ind > 0 && event_definer_ind > 0 && event_status_ind > 0
+               && charset_ind > 0 && collation_ind > 0);
 
     while (event_info->next_row())
     {
@@ -1323,6 +1343,8 @@ bool MariaDBServer::events_foreach(EventManipulator& func, json_t** error_out)
         event.name = event_info->get_string(db_name_ind) + "." + event_info->get_string(event_name_ind);
         event.definer = event_info->get_string(event_definer_ind);
         event.status = event_info->get_string(event_status_ind);
+        event.charset = event_info->get_string(charset_ind);
+        event.collation = event_info->get_string(collation_ind);
         func(event, error_out);
     }
     return true;
@@ -1360,10 +1382,13 @@ bool MariaDBServer::alter_event(const EventInfo& event, const string& target_sta
         quoted_definer = event.definer;
     }
 
-    string alter_event_query = string_printf("ALTER DEFINER = %s EVENT %s %s;",
-                                             quoted_definer.c_str(),
-                                             event.name.c_str(),
-                                             target_status.c_str());
+    // Change character set and collation to the values in the event description. Otherwise, the event
+    // values could be changed to whatever the monitor connection happens to be using.
+    string alter_event_query = string_printf(
+        "SET NAMES %s COLLATE %s; ALTER DEFINER = %s EVENT %s %s;",
+        event.charset.c_str(), event.collation.c_str(), quoted_definer.c_str(), event.name.c_str(),
+        target_status.c_str());
+
     if (execute_cmd(alter_event_query, &error_msg))
     {
         rval = true;
@@ -2147,6 +2172,7 @@ bool MariaDBServer::update_enabled_events()
     }
 
     m_enabled_events = std::move(full_names);
+
     return true;
 }
 

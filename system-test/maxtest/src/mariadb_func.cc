@@ -50,6 +50,9 @@ MYSQL* open_conn_db_flags(int port,
         set_ssl(conn);
     }
 
+    unsigned int timeout = 15;
+    mysql_options(conn, MYSQL_OPT_CONNECT_TIMEOUT, &timeout);
+
     // MXS-2568: This fixes mxs1828_double_local_infile
     mysql_optionsv(conn, MYSQL_OPT_LOCAL_INFILE, (void*)"1");
 
@@ -605,6 +608,18 @@ int get_int_version(std::string version)
     return major * 10000 + minor * 100 + patch;
 }
 
+std::string get_str_version(std::string version)
+{
+
+    std::string str_version;
+    int i = version.find('-');
+    if (i > 0)
+    {
+        return version.substr(0, i);
+    }
+    return version;
+}
+
 bool Connection::connect()
 {
     mysql_close(m_conn);
@@ -616,6 +631,14 @@ bool Connection::connect()
     if (m_ssl)
     {
         set_ssl(m_conn);
+    }
+
+    if (m_timeout)
+    {
+        unsigned int timeout = m_timeout;
+        mysql_optionsv(m_conn, MYSQL_OPT_CONNECT_TIMEOUT, &timeout);
+        mysql_optionsv(m_conn, MYSQL_OPT_READ_TIMEOUT, &timeout);
+        mysql_optionsv(m_conn, MYSQL_OPT_WRITE_TIMEOUT, &timeout);
     }
 
     return mysql_real_connect(m_conn, m_host.c_str(), m_user.c_str(), m_pw.c_str(), m_db.c_str(), m_port,

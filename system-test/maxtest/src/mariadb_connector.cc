@@ -4,13 +4,15 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
  * Public License.
  */
 
+#include <stdarg.h>
+#include <maxbase/format.hh>
 #include <maxtest/mariadb_connector.hh>
 #include <maxsql/mariadb.hh>
 #include <maxtest/log.hh>
@@ -39,6 +41,15 @@ bool maxtest::MariaDB::cmd(const std::string& sql)
     }
     m_log.expect(ret, "%s", error());
     return ret;
+}
+
+bool maxtest::MariaDB::cmd_f(const char* format, ...)
+{
+    va_list args;
+    va_start(args, format);
+    std::string sql = mxb::string_vprintf(format, args);
+    va_end(args);
+    return cmd(sql);
 }
 
 std::unique_ptr<mxq::QueryResult> maxtest::MariaDB::query(const std::string& query)

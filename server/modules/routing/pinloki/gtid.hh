@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -59,6 +59,11 @@ struct Gtid
     {
         return m_is_valid;
     }
+
+    /** Decrement the sequence number. If it would become 0,
+     *  return an invalid Gtid.
+     */
+    Gtid previous() const;
 
 private:
     uint32_t m_domain_id = -1;

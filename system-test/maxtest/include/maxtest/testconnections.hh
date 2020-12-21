@@ -6,11 +6,10 @@
 #include <thread>
 #include <functional>
 #include <fcntl.h>
-#include <pthread.h>
 #include <sys/time.h>
 
 #include <maxbase/ccdefs.hh>
-#include <maxtest/clustrix_nodes.hh>
+#include <maxtest/xpand_nodes.hh>
 #include <maxtest/mariadb_nodes.hh>
 #include <maxtest/maxscales.hh>
 #include <maxtest/columnstore_nodes.hh>
@@ -97,7 +96,7 @@ public:
      */
     Mariadb_nodes* repl {nullptr};
 
-    Clustrix_nodes* clustrix;
+    Xpand_nodes * xpand {nullptr};
 
     /**
      * @brief maxscales Maxscale object containing referebces to all Maxscale machines
@@ -154,27 +153,17 @@ public:
     /**
      * @brief timeout seconds until test termination
      */
-    long int timeout;
+    long int m_timeout {999999999}; // Never
 
     /**
-     * @brief log_copy_interval seconds between log copying
+     * @brief m_log_copy_interval seconds between log copying
      */
-    long int log_copy_interval;
+    long int m_log_copy_interval {999999999}; // Never
 
     /**
-     * @brief log_copy_interval seconds until next log copying
+     * @brief m_log_copy_interval seconds until next log copying
      */
-    long int log_copy_to_go;
-
-    /**
-     * @brief timeout_thread_p pointer to timeout thread
-     */
-    pthread_t timeout_thread_p;
-
-    /**
-     * @brief log_copy_thread_p pointer to log copying thread
-     */
-    pthread_t log_copy_thread_p;
+    long int m_log_copy_to_go {999999999}; // Never
 
     /** Check whether all nodes are in a valid state */
     static void check_nodes(bool value);
@@ -574,6 +563,9 @@ public:
     mxt::MaxScale& maxscale();
     TestLogger& logger();
 
+    std::string get_mdbci_config_name() {return m_mdbci_config_name;}
+
+
 private:
     void copy_one_mariadb_log(Mariadb_nodes* nrepl, int i, std::string filename);
     void copy_one_maxscale_log(int i, double timestamp);
@@ -628,6 +620,16 @@ private:
 
     int m_threads {4};      /**< Number of Maxscale threads */
 
+    /**
+     * @brief Timeout thread
+     */
+    std::thread m_timeout_thread;
+
+    /**
+     * @brief Log copying thread
+     */
+    std::thread m_log_copy_thread;
+
     timeval m_start_time {0, 0};    /**< time when test was started (used by printf to print Timestamp) */
 
     /**
@@ -640,26 +642,28 @@ private:
      * and re-installed on all Maxscale nodes. Used for 'run_test_snapshot'.
      */
     bool m_reinstall_maxscale {false};
+    bool m_mdbci_called {false};     /**< Was mdbci called when setting up test system? */
 
     std::string flatten_stringset(const StringSet& set);
     StringSet   parse_to_stringset(const std::string& source);
 
     bool read_cmdline_options(int argc, char* argv[]);
+    bool check_create_vms();
+    bool initialize_nodes();
+    bool check_backend_versions();
+
+    bool m_stop_threads {false};
+
+    /**
+     * @brief timeout_thread Thread which terminates test application after 'timeout' milliseconds
+     */
+    void timeout_thread();
+
+    /**
+     * @brief log_copy_thread Thread which peridically copies logs from Maxscale machine
+     */
+    void log_copy_thread();
 };
-
-/**
- * @brief timeout_thread Thread which terminates test application after 'timeout' milliseconds
- * @param ptr pointer to TestConnections object
- * @return void
- */
-void* timeout_thread(void* ptr);
-
-/**
- * @brief log_copy_thread Thread which peridically copies logs from Maxscale machine
- * @param ptr pointer to TestConnections object
- * @return void
- */
-void* log_copy_thread(void* ptr);
 
 /**
  * Dump two server status sets as strings

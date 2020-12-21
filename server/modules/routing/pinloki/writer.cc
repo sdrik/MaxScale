@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -35,13 +35,30 @@ using namespace std::literals::string_literals;
 namespace pinloki
 {
 
-Writer::Writer(Generator generator, mxb::Worker* worker, Inventory* inv)
+Writer::Writer(Generator generator, mxb::Worker* worker, InventoryWriter* inv)
     : m_generator(generator)
     , m_worker(worker)
     , m_inventory(*inv)
-    , m_current_gtid_list(mxq::GtidList::from_string(m_inventory.config().boot_strap_gtid_list()))
+    , m_current_gtid_list(m_inventory.rpl_state())
 {
     mxb_assert(m_worker);
+    m_inventory.set_is_writer_connected(false);
+
+    std::vector<maxsql::Gtid> gtids;
+    auto req_state = m_inventory.requested_rpl_state();
+    if (req_state.is_valid())
+    {
+        if (m_current_gtid_list.is_included(req_state))
+        {
+            MXB_SDEBUG("The requested gtid is already in the logs, removing.");
+            m_inventory.clear_requested_rpl_state();
+        }
+        else
+        {
+            m_current_gtid_list = req_state;
+        }
+    }
+
     m_thread = std::thread(&Writer::run, this);
 }
 
@@ -69,21 +86,49 @@ mxq::GtidList Writer::get_gtid_io_pos() const
     return m_current_gtid_list;
 }
 
+Error Writer::get_err() const
+{
+    std::lock_guard<std::mutex> guard(m_lock);
+    return m_error;
+}
+
 void Writer::update_gtid_list(const mxq::Gtid& gtid)
 {
     std::lock_guard<std::mutex> guard(m_lock);
     m_current_gtid_list.replace(gtid);
 }
 
+void Writer::start_replication(mxq::Connection& conn)
+{
+    conn.start_replication(m_inventory.config().server_id(), m_current_gtid_list);
+}
+
 void Writer::run()
 {
     while (m_running)
     {
+        Error error;
         try
         {
+            auto details = get_connection_details();
+
+            {
+                std::unique_lock<std::mutex> guard(m_lock);
+                if (!details.host.is_valid())
+                {
+                    MXB_SWARNING("No (replication) master found. Retrying...");
+                    m_cond.wait_for(guard, std::chrono::seconds(1), [this]() {
+                                        return !m_running;
+                                    });
+
+                    continue;
+                }
+                m_error = Error {};
+            }
+
             FileWriter file(&m_inventory, *this);
             mxq::Connection conn(get_connection_details());
-            conn.start_replication(m_inventory.config().server_id(), m_current_gtid_list);
+            start_replication(conn);
 
             while (m_running)
             {
@@ -94,6 +139,9 @@ void Writer::run()
                 }
 
                 file.add_event(rpl_event);
+
+                m_inventory.set_master_id(rpl_event.server_id());
+                m_inventory.set_is_writer_connected(true);
 
                 switch (rpl_event.event_type())
                 {
@@ -131,11 +179,27 @@ void Writer::run()
                 }
             }
         }
+        catch (const maxsql::DatabaseError& x)
+        {
+            error = Error {x.code(), x.what()};
+        }
         catch (const std::exception& x)
         {
-            MXS_ERROR("Error received during replication: %s", x.what());
-            std::unique_lock<std::mutex> guard(m_lock);
-            m_cond.wait_for(guard, std::chrono::seconds(10), [this]() {
+            error = Error {-1, x.what()};
+        }
+
+        m_inventory.set_is_writer_connected(false);
+
+        std::unique_lock<std::mutex> guard(m_lock);
+        if (error.code)
+        {
+            m_error = error;
+            if (m_timer.alarm())
+            {
+                MXS_SERROR("Error received during replication: " << error.str);
+            }
+
+            m_cond.wait_for(guard, std::chrono::seconds(1), [this]() {
                                 return !m_running;
                             });
         }
@@ -147,10 +211,7 @@ void Writer::save_gtid_list(FileWriter& file_writer)
     if (m_current_gtid_list.is_valid())
     {
         file_writer.commit_txn();
-
-        std::ofstream ofs(m_inventory.config().gtid_file_path());
-        ofs << m_current_gtid_list;
-        // m_current_gtid_list.clear(); TODO change of logic after gitid => gtid list change
+        m_inventory.save_rpl_state(m_current_gtid_list);
     }
 }
 }

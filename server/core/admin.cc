@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -83,6 +83,7 @@ static struct ThisUnit
 {
     struct MHD_Daemon* daemon = nullptr;
     std::string        ssl_key;
+    std::string        ssl_version;
     std::string        ssl_cert;
     std::string        ssl_ca;
     bool               using_ssl = false;
@@ -271,6 +272,35 @@ std::string get_filename(const HttpRequest& request)
     return path;
 }
 
+// Converts mxb::ssl_version::Version into the corresponding GNUTLS configuration string
+static const char* get_ssl_version(const mxb::ssl_version::Version ssl_version)
+{
+    switch (ssl_version)
+    {
+    case mxb::ssl_version::SSL_MAX:
+    case mxb::ssl_version::TLS_MAX:
+    case mxb::ssl_version::SSL_TLS_MAX:
+    case mxb::ssl_version::TLS10:
+        return "NORMAL:-VERS-SSL3.0";
+
+    case mxb::ssl_version::TLS11:
+        return "NORMAL:-VERS-SSL3.0:-VERS-TLS1.0";
+
+    case mxb::ssl_version::TLS12:
+        return "NORMAL:-VERS-SSL3.0:-VERS-TLS1.0:-VERS-TLS1.1";
+
+    case mxb::ssl_version::TLS13:
+        return "NORMAL:-VERS-SSL3.0:-VERS-TLS1.0:-VERS-TLS1.1:-VERS-TLS1.2";
+
+    case mxb::ssl_version::SSL_UNKNOWN:
+    default:
+        mxb_assert(!true);
+        break;
+    }
+
+    return "";
+}
+
 static bool load_ssl_certificates()
 {
     bool rval = true;
@@ -283,6 +313,7 @@ static bool load_ssl_certificates()
     {
         this_unit.ssl_key = load_file(key.c_str());
         this_unit.ssl_cert = load_file(cert.c_str());
+        this_unit.ssl_version = get_ssl_version(config.admin_ssl_version);
 
         if (!ca.empty())
         {
@@ -929,16 +960,19 @@ bool mxs_admin_init()
                         "to enable HTTPS or add `admin_secure_gui=false` to allow use of the GUI without encryption.");
         }
 
-        // The port argument is ignored and the port in the struct sockaddr is used instead
-        this_unit.daemon = MHD_start_daemon(options, 0, NULL, NULL, handle_client, NULL,
+        // The port argument is only used for error reporting. The actual address and port that the daemon
+        // binds to is in the `struct sockaddr`.
+        this_unit.daemon = MHD_start_daemon(options, config.admin_port,
+                                            NULL, NULL, handle_client, NULL,
                                             MHD_OPTION_EXTERNAL_LOGGER, admin_log_error, NULL,
                                             MHD_OPTION_NOTIFY_COMPLETED, close_client, NULL,
                                             MHD_OPTION_SOCK_ADDR, &addr,
                                             !this_unit.using_ssl ? MHD_OPTION_END :
                                             MHD_OPTION_HTTPS_MEM_KEY, this_unit.ssl_key.c_str(),
                                             MHD_OPTION_HTTPS_MEM_CERT, this_unit.ssl_cert.c_str(),
+                                            MHD_OPTION_HTTPS_PRIORITIES, this_unit.ssl_version.c_str(),
                                             this_unit.ssl_ca.empty() ? MHD_OPTION_END :
-                                            MHD_OPTION_HTTPS_MEM_TRUST, this_unit.ssl_cert.c_str(),
+                                            MHD_OPTION_HTTPS_MEM_TRUST, this_unit.ssl_ca.c_str(),
                                             MHD_OPTION_END);
     }
 

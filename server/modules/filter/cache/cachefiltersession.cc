@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -333,7 +333,7 @@ CacheFilterSession* CacheFilterSession::create(std::unique_ptr<SessionCache> sCa
                                                SERVICE* pService)
 {
     CacheFilterSession* pCacheFilterSession = NULL;
-    auto db = static_cast<MYSQL_session*>(pSession->protocol_data())->db;
+    auto db = pSession->database();
     char* zDefaultDb = NULL;
 
     if (!db.empty())

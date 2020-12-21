@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -29,13 +29,14 @@ int main(int argc, char** argv)
 
     test.repl->connect();
     delete_slave_binlogs(test);
+    const int N = 4;
 
     // Enable the disks-plugin on all servers. Has to be done before MaxScale is on to prevent disk space
     // monitoring from disabling itself.
     bool disks_plugin_loaded = false;
     const char strict_mode[] = "SET GLOBAL gtid_strict_mode=%i;";
     test.repl->connect();
-    for (int i = 0; i < test.repl->N; i++)
+    for (int i = 0; i < N; i++)
     {
         MYSQL* conn = test.repl->nodes[i];
         test.try_query(conn, "INSTALL SONAME 'disks';");
@@ -147,8 +148,8 @@ int main(int argc, char** argv)
 
     if (disks_plugin_loaded)
     {
-        // Enable the disks-plugin on all servers.
-        for (int i = 0; i < test.repl->N; i++)
+        // Disable the disks-plugin on all servers.
+        for (int i = 0; i < N; i++)
         {
             MYSQL* conn = test.repl->nodes[i];
             test.try_query(conn, "UNINSTALL SONAME 'disks';");

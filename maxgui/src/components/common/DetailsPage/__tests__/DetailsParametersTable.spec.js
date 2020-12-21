@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -398,9 +398,11 @@ describe('DetailsParametersTable.vue', () => {
         await mockupParametersChange(wrapper)
         // click "That's Right" button
         await wrapper.find('.save').trigger('click')
-        // should clear component state and close dialog
-        expect(wrapper.vm.$data.showConfirmDialog).to.be.false
-        expect(wrapper.vm.$data.editableCell).to.be.false
-        expect(wrapper.vm.$data.changedParams).to.be.deep.equals([])
+        await wrapper.vm.$nextTick(() => {
+            // should clear component state and close dialog
+            expect(wrapper.vm.$data.showConfirmDialog).to.be.false
+            expect(wrapper.vm.$data.editableCell).to.be.false
+            expect(wrapper.vm.$data.changedParams).to.be.deep.equals([])
+        })
     })
 })

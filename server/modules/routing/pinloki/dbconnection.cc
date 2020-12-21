@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -47,7 +47,6 @@ Connection::~Connection()
 void Connection::start_replication(unsigned int server_id, maxsql::GtidList gtid)
 {
     std::string gtid_str = gtid.is_valid() ? gtid.to_string() : "";
-    MXS_INFO("Starting replication from GTID '%s'", gtid_str.c_str());
 
     // The heartbeat period is in nanoseconds. We need frequent updates to keep get_rpl_msg responsive.
     auto hb = "SET @master_heartbeat_period=1000000000";

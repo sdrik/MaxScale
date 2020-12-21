@@ -5,7 +5,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -352,9 +352,22 @@ int MariaDBClientConnection::send_mysql_client_handshake()
     uint8_t mysql_server_status[2];
     uint8_t mysql_scramble_len = 21;
     uint8_t mysql_filler_ten[10] = {};
-    /* uint8_t mysql_last_byte = 0x00; not needed */
-    uint8_t server_scramble[GW_MYSQL_SCRAMBLE_SIZE] {};
-    mxb::Worker::gen_random_bytes(server_scramble, sizeof(server_scramble));
+
+    /* gen_random_bytes() generates random bytes (0-255). This is ok as scramble for most clients
+     * (e.g. mariadb) but not for mysql-connector-java. To be on the safe side, ensure every byte
+     * is a non-whitespace character. To do the rescaling of values without noticeable bias, generate
+     * double the required bytes.
+     */
+    uint8_t server_scramble[GW_MYSQL_SCRAMBLE_SIZE];
+    uint8_t random_bytes[2 * sizeof(server_scramble)];
+    mxb::Worker::gen_random_bytes(random_bytes, sizeof(random_bytes));
+    for (size_t i = 0; i < sizeof(server_scramble); i++)
+    {
+        auto ptr = &random_bytes[2 * i];
+        auto val16 = *(reinterpret_cast<uint16_t*>(ptr));
+        server_scramble[i] = '!' + (val16 % (('~' + 1) - '!'));
+    }
+
     bool is_maria = supports_extended_caps(service);
 
     // copy back to the caller
@@ -1087,8 +1100,7 @@ void MariaDBClientConnection::handle_use_database(GWBUF* read_buffer)
 
     if (!databases.empty())
     {
-        m_session_data->db = databases[0];
-        m_session->start_database_change(m_session_data->db);
+        m_session->start_database_change(databases[0]);
     }
 }
 
@@ -1162,8 +1174,7 @@ MariaDBClientConnection::process_special_commands(GWBUF* read_buffer, uint8_t cm
         char* start = (char*)GWBUF_DATA(read_buffer);
         char* end = start + GWBUF_LENGTH(read_buffer);
         start += MYSQL_HEADER_LEN + 1;
-        m_session_data->db.assign(start, end);
-        m_session->start_database_change(m_session_data->db);
+        m_session->start_database_change(std::string(start, end));
     }
     else if (cmd == MXS_COM_QUERY)
     {
@@ -1227,7 +1238,8 @@ bool MariaDBClientConnection::route_statement(mxs::Buffer&& buffer)
         // the smallest version number.
         qc_set_server_version(m_version);
 
-        if (process_special_commands(packetbuf, m_command) == SpecialCmdRes::END)
+        if (!session_is_load_active(session)
+            && process_special_commands(packetbuf, m_command) == SpecialCmdRes::END)
         {
             gwbuf_free(packetbuf);
             packetbuf = nullptr;
@@ -1512,7 +1524,7 @@ void MariaDBClientConnection::hangup(DCB* event_dcb)
         send_mysql_err_packet(seqno, 0, 1927, "08S01", errmsg.c_str());
     }
 
-    // We simply close the DCB, this will propagate the closure to any
+    // We simply close the session, this will propagate the closure to any
     // backend descriptors and perform the session cleanup.
     m_session->kill();
 }
@@ -1703,7 +1715,7 @@ void MariaDBClientConnection::execute_kill(std::shared_ptr<KillInfo> info)
     MXS_SESSION* ref = session_get_ref(m_session);
     auto origin = mxs::RoutingWorker::get_current();
 
-    auto func = [info, ref, origin]() {
+    auto func = [this, info, ref, origin]() {
             // First, gather the list of servers where the KILL should be sent
             mxs::RoutingWorker::execute_concurrently(
                 [info, ref]() {
@@ -1712,17 +1724,19 @@ void MariaDBClientConnection::execute_kill(std::shared_ptr<KillInfo> info)
 
             // Then move execution back to the original worker to keep all connections on the same thread
             origin->call(
-                [info, ref]() {
+                [this, info, ref]() {
                     for (const auto& a : info->targets)
                     {
                         if (LocalClient* client = LocalClient::create(info->session, a.first))
                         {
                             client->connect();
-                            // TODO: There can be multiple connections to the same server
+                            // TODO: There can be multiple connections to the same server. Currently only one
+                            // connection per server is killed.
                             client->queue_query(modutil_create_query(a.second.c_str()));
+                            client->queue_query(mysql_create_com_quit(NULL, 0));
 
-                            // The LocalClient needs to delete itself once the queries are done
-                            client->self_destruct();
+                            mxb_assert(ref->state() != MXS_SESSION::State::STOPPING);
+                            add_local_client(client);
                         }
                     }
 
@@ -2092,6 +2106,11 @@ MariaDBClientConnection::StateMachineRes MariaDBClientConnection::process_handsh
                     {
                         m_handshake_state = HSState::SSL_NEG;
                     }
+                    else if (parse_handshake_response_packet(buffer))
+                    {
+                        send_authetication_error(AuthErrorType::ACCESS_DENIED);
+                        m_handshake_state = HSState::FAIL;
+                    }
                     else
                     {
                         send_mysql_err_packet(next_seq, 0, er_bad_handshake, sql_errstate,
@@ -2450,4 +2469,21 @@ bool MariaDBClientConnection::send_mysql_err_packet(int packet_number, int in_af
     GWBUF* buf = modutil_create_mysql_err_msg(packet_number, in_affected_rows, mysql_errno,
                                               sqlstate_msg, mysql_message);
     return write(buf);
+}
+
+void MariaDBClientConnection::add_local_client(LocalClient* client)
+{
+    // Prune stale LocalClients before adding the new one
+    auto it = std::remove_if(m_local_clients.begin(), m_local_clients.end(), [](const auto& client) {
+                                 return !client->is_open();
+                             });
+
+    m_local_clients.erase(it, m_local_clients.end());
+
+    m_local_clients.emplace_back(client);
+}
+
+void MariaDBClientConnection::kill()
+{
+    m_local_clients.clear();
 }

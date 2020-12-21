@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -1904,20 +1904,21 @@ bool runtime_alter_server_from_json(Server* server, json_t* new_json)
 
         if (rval && new_parameters)
         {
-            server->configure(new_parameters);
-
-            std::ostringstream ss;
-            server->persist(ss);
-            rval = runtime_save_config(server->name(), ss.str());
-
-            // Restart the monitor that monitors this server to propagate the configuration changes
-            // forward. This causes the monitor to pick up on new timeouts and addresses immediately.
-            if (auto mon = MonitorManager::server_is_monitored(server))
+            if ((rval = server->configure(new_parameters)))
             {
-                if (mon->is_running())
+                std::ostringstream ss;
+                server->persist(ss);
+                rval = runtime_save_config(server->name(), ss.str());
+
+                // Restart the monitor that monitors this server to propagate the configuration changes
+                // forward. This causes the monitor to pick up on new timeouts and addresses immediately.
+                if (auto mon = MonitorManager::server_is_monitored(server))
                 {
-                    mon->stop();
-                    mon->start();
+                    if (mon->is_running())
+                    {
+                        mon->stop();
+                        mon->start();
+                    }
                 }
             }
         }

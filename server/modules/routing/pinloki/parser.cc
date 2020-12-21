@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -35,6 +35,56 @@ using CMT = pinloki::ChangeMasterType;
 namespace
 {
 
+constexpr std::array<const char*, int(CMT::END)> master_type_strs
+{
+    "MASTER_HOST",
+    "MASTER_PORT",
+    "MASTER_USER",
+    "MASTER_PASSWORD",
+    "MASTER_USE_GTID",
+    "MASTER_SSL",
+    "MASTER_SSL_CA",
+    "MASTER_SSL_CAPATH",
+    "MASTER_SSL_CERT",
+    "MASTER_SSL_CRL",
+    "MASTER_SSL_CRLPATH",
+    "MASTER_SSL_KEY",
+    "MASTER_SSL_CIPHER",
+    "MASTER_SSL_VERIFY_SERVER_CERT",
+    "MASTER_LOG_FILE",
+    "MASTER_LOG_POS",
+    "RELAY_LOG_FILE",
+    "RELAY_LOG_POS",
+    "MASTER_HEARTBEAT_PERIOD",
+    "MASTER_BIND",
+    "MASTER_CONNECT_RETRY",
+    "MASTER_DELAY",
+    "IGNORE_SERVER_IDS",
+    "DO_DOMAIN_IDS",
+    "IGNORE_DOMAIN_IDS"
+};
+
+static_assert(master_type_strs.size() == size_t(CMT::END), "check master_type_strs");
+}
+
+namespace pinloki
+{
+
+std::string to_string(CMT type)
+{
+    size_t index = size_t(type);
+    if (index >= master_type_strs.size())
+    {
+        return "UNKNOWN";
+    }
+
+    return master_type_strs[index];
+}
+}
+
+namespace
+{
+
 enum class Slave
 {
     START,
@@ -46,6 +96,7 @@ enum class ShowType
 {
     MASTER_STATUS,
     SLAVE_STATUS,
+    ALL_SLAVES_STATUS,
     BINLOGS,
 };
 
@@ -65,20 +116,31 @@ struct ChangeMasterSymbols : x3::symbols<CMT>
 {
     ChangeMasterSymbols()
     {
-        add("MASTER_HOST", CMT::MASTER_HOST);
-        add("MASTER_PORT", CMT::MASTER_PORT);
-        add("MASTER_USER", CMT::MASTER_USER);
-        add("MASTER_PASSWORD", CMT::MASTER_PASSWORD);
-        add("MASTER_USE_GTID", CMT::MASTER_USE_GTID);
-        add("MASTER_SSL", CMT::MASTER_SSL);
-        add("MASTER_SSL_CA", CMT::MASTER_SSL_CA);
-        add("MASTER_SSL_CAPATH", CMT::MASTER_SSL_CAPATH);
-        add("MASTER_SSL_CERT", CMT::MASTER_SSL_CERT);
-        add("MASTER_SSL_CRL", CMT::MASTER_SSL_CRL);
-        add("MASTER_SSL_CRLPATH", CMT::MASTER_SSL_CRLPATH);
-        add("MASTER_SSL_KEY", CMT::MASTER_SSL_KEY);
-        add("MASTER_SSL_CIPHER", CMT::MASTER_SSL_CIPHER);
-        add("MASTER_SSL_VERIFY_SERVER_CERT", CMT::MASTER_SSL_VERIFY_SERVER_CERT);
+        add(to_string(CMT::MASTER_HOST), CMT::MASTER_HOST);
+        add(to_string(CMT::MASTER_PORT), CMT::MASTER_PORT);
+        add(to_string(CMT::MASTER_USER), CMT::MASTER_USER);
+        add(to_string(CMT::MASTER_PASSWORD), CMT::MASTER_PASSWORD);
+        add(to_string(CMT::MASTER_USE_GTID), CMT::MASTER_USE_GTID);
+        add(to_string(CMT::MASTER_SSL), CMT::MASTER_SSL);
+        add(to_string(CMT::MASTER_SSL_CA), CMT::MASTER_SSL_CA);
+        add(to_string(CMT::MASTER_SSL_CAPATH), CMT::MASTER_SSL_CAPATH);
+        add(to_string(CMT::MASTER_SSL_CERT), CMT::MASTER_SSL_CERT);
+        add(to_string(CMT::MASTER_SSL_CRL), CMT::MASTER_SSL_CRL);
+        add(to_string(CMT::MASTER_SSL_CRLPATH), CMT::MASTER_SSL_CRLPATH);
+        add(to_string(CMT::MASTER_SSL_KEY), CMT::MASTER_SSL_KEY);
+        add(to_string(CMT::MASTER_SSL_CIPHER), CMT::MASTER_SSL_CIPHER);
+        add(to_string(CMT::MASTER_SSL_VERIFY_SERVER_CERT), CMT::MASTER_SSL_VERIFY_SERVER_CERT);
+        add(to_string(CMT::MASTER_LOG_FILE), CMT::MASTER_LOG_FILE);
+        add(to_string(CMT::MASTER_LOG_POS), CMT::MASTER_LOG_POS);
+        add(to_string(CMT::MASTER_BIND), CMT::MASTER_BIND);
+        add(to_string(CMT::MASTER_CONNECT_RETRY), CMT::MASTER_CONNECT_RETRY);
+        add(to_string(CMT::MASTER_HEARTBEAT_PERIOD), CMT::MASTER_HEARTBEAT_PERIOD);
+        add(to_string(CMT::RELAY_LOG_FILE), CMT::RELAY_LOG_FILE);
+        add(to_string(CMT::RELAY_LOG_POS), CMT::RELAY_LOG_POS);
+        add(to_string(CMT::MASTER_DELAY), CMT::MASTER_DELAY);
+        add(to_string(CMT::IGNORE_SERVER_IDS), CMT::IGNORE_SERVER_IDS);
+        add(to_string(CMT::DO_DOMAIN_IDS), CMT::DO_DOMAIN_IDS);
+        add(to_string(CMT::IGNORE_DOMAIN_IDS), CMT::IGNORE_DOMAIN_IDS);
     }
 } change_master_sym;
 
@@ -117,6 +179,7 @@ struct Set
 
 struct ChangeMaster
 {
+    std::string                       connection_name;
     std::vector<ChangeMasterVariable> values;
 };
 
@@ -201,6 +264,7 @@ DECLARE_ATTR_RULE(variable, "key-value", Variable);
 DECLARE_ATTR_RULE(change_master_variable, "key-value", ChangeMasterVariable);
 DECLARE_ATTR_RULE(show_master, "show master", ShowType);
 DECLARE_ATTR_RULE(show_slave, "show slave", ShowType);
+DECLARE_ATTR_RULE(show_all_slaves, "show all slaves", ShowType);
 DECLARE_ATTR_RULE(show_binlogs, "binary logs", ShowType);
 DECLARE_ATTR_RULE(show_variables, "show variables", ShowVariables);
 DECLARE_ATTR_RULE(show_options, "MASTER, SLAVE, BINLOGS or VARIABLES", Show);
@@ -213,6 +277,8 @@ DECLARE_ATTR_RULE(change_master, "change master", ChangeMaster);
 DECLARE_ATTR_RULE(slave, "slave", Slave);
 DECLARE_ATTR_RULE(purge_logs, "purge logs", PurgeLogs);
 DECLARE_RULE(end_of_input, "end of input");
+DECLARE_ATTR_RULE(command, "command", Command);
+DECLARE_ATTR_RULE(set_statement, "set_stmt", Command);
 DECLARE_ATTR_RULE(grammar, "grammar", Command);
 
 //
@@ -251,11 +317,11 @@ const auto set_def = x3::lit("SET") > global_or_session > (set_names | (variable
 
 // CHANGE MASTER TO, only accepts a limited set of keys
 const auto change_master_variable_def = change_master_sym > eq > field;
-const auto change_master_def = x3::lit("CHANGE") > x3::lit("MASTER") > x3::lit("TO")
+const auto change_master_def = x3::lit("CHANGE") > x3::lit("MASTER") > -q_str > x3::lit("TO")
     > (change_master_variable % ',');
 
-// START SLAVE et al.
-const auto slave_def = slave_sym > "SLAVE";
+// START SLAVE et al. The connection_name, if any, is ignored.
+const auto slave_def = slave_sym > "SLAVE" > x3::omit[-q_str];
 
 // PURGE {BINARY | MASTER} LOGS TO '<binlog name>'
 const auto purge_logs_def = x3::lit("PURGE") > (x3::lit("BINARY") | x3::lit("MASTER")) > x3::lit("LOGS")
@@ -264,27 +330,39 @@ const auto purge_logs_def = x3::lit("PURGE") > (x3::lit("BINARY") | x3::lit("MAS
 // SHOW commands
 const auto show_master_def = x3::lit("MASTER") > x3::lit("STATUS") > x3::attr(ShowType::MASTER_STATUS);
 const auto show_slave_def = x3::lit("SLAVE") > x3::lit("STATUS") > x3::attr(ShowType::SLAVE_STATUS);
+const auto show_all_slaves_def = x3::lit("ALL") > x3::lit("SLAVES")
+    > x3::lit("STATUS") > x3::attr(ShowType::ALL_SLAVES_STATUS);
 const auto show_binlogs_def = x3::lit("BINARY") > x3::lit("LOGS") > x3::attr(ShowType::BINLOGS);
 const auto show_variables_def = x3::lit("VARIABLES") > x3::lit("LIKE") > q_str;
-const auto show_options_def = (show_master | show_slave | show_binlogs | show_variables);
+const auto show_options_def = (show_master | show_slave | show_all_slaves
+                               | show_binlogs | show_variables);
 const auto show_def = x3::lit("SHOW") > show_options;
 const auto end_of_input_def = x3::eoi | x3::lit(";");
 
-// The complete grammar, case insensitive
-const auto grammar_def = x3::no_case[
+const auto command_def =
     master_gtid_wait
     | select
     | set
     | change_master
     | slave
     | show
-    | purge_logs] > end_of_input;
+    | purge_logs;
+
+// SET STATEMENT ... Parsed, but not used (not implemented)
+const auto set_statement_def = x3::lit("SET") > x3::lit("STATEMENT")
+    > x3::omit[variable % ','] > x3::lit("FOR") > command;
+
+// The complete grammar, case insensitive
+const auto grammar_def = x3::no_case[
+    command
+    | set_statement] > end_of_input;
 
 // Boost magic that combines the rule declarations and definitions (definitions _must_ end in a _def suffix)
 BOOST_SPIRIT_DEFINE(str, sq_str, dq_str, field, variable, select, set, eq, q_str,
-                    show_master, show_slave, show_binlogs, show_variables, show, set_names,
+                    show_master, show_slave, show_all_slaves, show_binlogs, show_variables, show, set_names,
                     global_or_session, show_options, func, master_gtid_wait,
-                    change_master_variable, change_master, slave, purge_logs, end_of_input, grammar);
+                    change_master_variable, change_master, slave, purge_logs, end_of_input,
+                    command, set_statement, grammar);
 
 
 // The visitor class that does the final processing of the result
@@ -327,6 +405,12 @@ struct ResultVisitor : public boost::static_visitor<>
 
     void operator()(ChangeMaster& s)
     {
+        if (!s.connection_name.empty())
+        {
+            MXS_SWARNING("Connection name ignored in CHANGE MASTER. "
+                         "Multi-Source Replication is not supported by Binlog Router");
+        }
+
         pinloki::parser::ChangeMasterValues changes;
 
         for (const auto& a : s.values)
@@ -369,7 +453,11 @@ struct ResultVisitor : public boost::static_visitor<>
             break;
 
         case ShowType::SLAVE_STATUS:
-            m_handler->show_slave_status();
+            m_handler->show_slave_status(false);
+            break;
+
+        case ShowType::ALL_SLAVES_STATUS:
+            m_handler->show_slave_status(true);
             break;
 
         case ShowType::BINLOGS:
@@ -434,7 +522,7 @@ BOOST_FUSION_ADAPT_STRUCT(Variable, key, value);
 BOOST_FUSION_ADAPT_STRUCT(ChangeMasterVariable, key, value);
 BOOST_FUSION_ADAPT_STRUCT(Select, values);
 BOOST_FUSION_ADAPT_STRUCT(Set, values);
-BOOST_FUSION_ADAPT_STRUCT(ChangeMaster, values);
+BOOST_FUSION_ADAPT_STRUCT(ChangeMaster, connection_name, values);
 BOOST_FUSION_ADAPT_STRUCT(ShowVariables, like);
 BOOST_FUSION_ADAPT_STRUCT(PurgeLogs, up_to);
 BOOST_FUSION_ADAPT_STRUCT(MasterGtidWait, gtid, timeout);

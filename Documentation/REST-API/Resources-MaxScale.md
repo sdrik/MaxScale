@@ -25,7 +25,7 @@ file locations, configuration options and version information.
     },
     "data": {
         "attributes": {
-            "parameters": {
+            "parameters": { // Core MaxScale parameters
                 "libdir": "/usr/lib64/maxscale",
                 "datadir": "/var/lib/maxscale",
                 "process_datadir": "/var/lib/maxscale/data16218",
@@ -58,11 +58,11 @@ file locations, configuration options and version information.
                 "dump_last_statements": "never",
                 "load_persisted_configs": false
             },
-            "version": "2.3.6",
-            "commit": "47158faf12c156775c39388652a77f8a8c542d28",
-            "started_at": "Thu, 04 Apr 2019 21:04:06 GMT",
-            "activated_at": "Thu, 04 Apr 2019 21:04:06 GMT",
-            "uptime": 337
+            "version": "2.3.6", // The MaxScale version
+            "commit": "47158faf12c156775c39388652a77f8a8c542d28", // Commit that MaxScale was built from
+            "started_at": "Thu, 04 Apr 2019 21:04:06 GMT", // The time when MaxScale was started
+            "activated_at": "Thu, 04 Apr 2019 21:04:06 GMT", // The last time when the `passive` parameter was set to `false`
+            "uptime": 337 // How many seconds MaxScale has been running
         },
         "id": "maxscale",
         "type": "maxscale"
@@ -120,22 +120,20 @@ value of `threads`.
         "type": "threads",
         "attributes": {
             "stats": {
-                "reads": 2,
-                "writes": 0,
-                "errors": 0,
-                "hangups": 0,
-                "accepts": 0,
-                "blocking_polls": 180,
-                "event_queue_length": 1,
-                "max_event_queue_length": 1,
-                "max_exec_time": 0,
-                "max_queue_time": 0,
-                "current_descriptors": 1,
-                "total_descriptors": 1,
-                "load": {
-                    "last_second": 0,
-                    "last_minute": 0,
-                    "last_hour": 0
+                "reads": 2, // Number of EPOLLIN events
+                "writes": 0, // number of EPOLLOUT events
+                "errors": 0, // Number of EPOLLERR events
+                "hangups": 0, // Number of EPOLLHUP or EPOLLRDHUP events
+                "accepts": 0, // Number of EPOLLIN events for listeners
+                "max_event_queue_length": 1, // Maximum number of events returned by epoll
+                "max_exec_time": 0, // Maximum number of internal ticks (100ms per tick) an event took to execute
+                "max_queue_time": 0, // Maximum number of internal ticks that an event waited in the queue
+                "current_descriptors": 1, // How many file descriptors this thread is handling
+                "total_descriptors": 1, // Total number of file descriptors added to this thread
+                "load": { // Thread load in percentages i.e. 100 is 100%
+                    "last_second": 0, // Load over the past second
+                    "last_minute": 0, // Load over the past minute
+                    "last_hour": 0 // Load over the past hour
                 }
             }
         },
@@ -159,6 +157,7 @@ Get the information for all threads. Returns a collection of threads resources.
 `Status: 200 OK`
 
 ```javascript
+// See `/v1/maxscale/threads/:id` for a descriptions of the fields
 {
     "links": {
         "self": "http://localhost:8989/v1/maxscale/threads/"
@@ -300,7 +299,7 @@ location where the log files are stored.
     },
     "data": {
         "attributes": {
-            "parameters": {
+            "parameters": { // Logging parameters
                 "highprecision": false,
                 "maxlog": true,
                 "syslog": true,
@@ -314,8 +313,8 @@ location where the log files are stored.
                 "log_info": true,
                 "log_debug": false
             },
-            "log_file": "/home/markusjm/build/log/maxscale/maxscale.log",
-            "log_priorities": [
+            "log_file": "/home/markusjm/build/log/maxscale/maxscale.log", // The file MaxScale is logging into if `maxlog` is enabled
+            "log_priorities": [ // Enabled log priorities
                 "error",
                 "warning",
                 "notice",
@@ -414,22 +413,22 @@ parameters it accepts as a module.
             "description": "Firewall Filter",
             "api": "filter",
             "status": "GA",
-            "commands": [
+            "commands": [ // List of module commands
                 {
-                    "id": "rules/reload",
+                    "id": "rules/reload", // Name of the command
                     "type": "module_command",
                     "links": {
                         "self": "http://localhost:8989/v1/modules/dbfwfilter/rules/reload"
                     },
                     "attributes": {
-                        "method": "POST",
-                        "arg_min": 1,
-                        "arg_max": 2,
-                        "parameters": [
+                        "method": "POST", // Whether POST or GET should be used to call this command
+                        "arg_min": 1, // Minimum number of arguments
+                        "arg_max": 2, // Maximum number of arguments
+                        "parameters": [ // Parameter types for the command
                             {
-                                "description": "Filter to reload",
-                                "type": "FILTER",
-                                "required": true
+                                "description": "Filter to reload", // Parameter description
+                                "type": "FILTER", // Value type
+                                "required": true // Whether the parameter is required
                             },
                             {
                                 "description": "Path to rule file",
@@ -440,15 +439,15 @@ parameters it accepts as a module.
                     }
                 }
             ],
-            "parameters": [
+            "parameters": [ // Module parameters
                 {
-                    "name": "rules",
-                    "type": "path"
+                    "name": "rules", // Parameter name
+                    "type": "path" // Parameter type
                 },
                 {
                     "name": "log_match",
                     "type": "bool",
-                    "default_value": "false"
+                    "default_value": "false" // Default value of the parameter
                 },
                 {
                     "name": "log_no_match",
@@ -459,7 +458,7 @@ parameters it accepts as a module.
                     "name": "action",
                     "type": "enum",
                     "default_value": "block",
-                    "enum_values": [
+                    "enum_values": [ // Accepted enumeration values
                         "allow",
                         "block",
                         "ignore"
@@ -571,7 +570,7 @@ Command with output:
     "links": {
         "self": "http://localhost:8989/v1/maxscale/modules/dbfwfilter/rules/json"
     },
-    "meta": [
+    "meta": [ // Output of module command (module dependent)
         {
             "name": "test3",
             "type": "COLUMN",
@@ -614,14 +613,12 @@ GET /v1/maxscale/query_classifier/classify?sql=SELECT+1
         "id": "classify",
         "type": "classify",
         "attributes": {
-            "parameters": {
-                "parse_result": "QC_QUERY_PARSED",
-                "type_mask": "QUERY_TYPE_READ",
-                "operation": "QUERY_OP_SELECT",
-                "has_where_clause": false,
-                "fields": [],
-                "functions": []
-            }
+            "parse_result": "QC_QUERY_PARSED",
+            "type_mask": "QUERY_TYPE_READ",
+            "operation": "QUERY_OP_SELECT",
+            "has_where_clause": false,
+            "fields": [],
+            "functions": []
         }
     }
 }

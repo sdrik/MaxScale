@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -86,6 +86,11 @@ std::string Config::gtid_file_path() const
     return path(m_gtid_file);
 }
 
+std::string Config::requested_gtid_file_path() const
+{
+    return path("requested_rpl_state");
+}
+
 std::string Config::master_info_file() const
 {
     return path(m_master_info_file);
@@ -94,16 +99,6 @@ std::string Config::master_info_file() const
 std::string Config::inventory_file_path() const
 {
     return path(m_binlog_inventory_file);
-}
-
-std::string Config::boot_strap_gtid_list() const
-{
-    return m_boot_strap_gtid_list;
-}
-
-void Config::set_boot_strap_gtid_list(const std::string& gtid)
-{
-    m_boot_strap_gtid_list = gtid;
 }
 
 uint32_t Config::server_id() const
@@ -118,7 +113,12 @@ std::chrono::seconds Config::net_timeout() const
 
 bool Config::select_master() const
 {
-    return m_select_master;
+    return m_select_master && !m_select_master_disabled;
+}
+
+void Config::disable_select_master()
+{
+    m_select_master_disabled = true;
 }
 
 int32_t Config::expire_log_minimum_files() const

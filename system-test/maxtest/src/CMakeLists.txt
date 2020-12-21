@@ -1,7 +1,7 @@
 add_library(maxtest SHARED
         big_load.cc
         blob_test.cc
-        clustrix_nodes.cpp
+        xpand_nodes.cpp
         config_operations.cc
         different_size.cc
         envv.cc
@@ -25,8 +25,18 @@ add_library(maxtest SHARED
         testconnections.cc
         ${CMAKE_CURRENT_BINARY_DIR}/test_info.cc)
 
-target_link_libraries(maxtest ${JANSSON_LIBRARIES} maxbase maxsql cdc_connector z m pthread
-         rt crypto crypt ${RDKAFKA_LIBRARIES})
+target_link_libraries(maxtest
+  ${RDKAFKA_LIBRARIES}
+  ${JANSSON_LIBRARIES}
+  cdc_connector
+  maxsql
+  maxbase
+  pthread
+  crypt
+  crypto
+  z
+  rt
+  m)
 set_target_properties(maxtest PROPERTIES VERSION "1.0.0" LINK_FLAGS -Wl,-z,defs)
 install(TARGETS maxtest DESTINATION system-test)
 add_dependencies(maxtest jansson librdkafka)

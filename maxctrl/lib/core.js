@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -14,6 +14,7 @@
 var fs = require("fs");
 var program = require("yargs");
 var inquirer = require("inquirer");
+var readlineSync = require("readline-sync");
 
 // Note: The version.js file is generated at configuation time. If you are
 // building in-source, manually create the file
@@ -38,8 +39,7 @@ program
   })
   .option("p", {
     alias: "password",
-    describe:
-      "Password for the user. To input the password manually, give -p as the last argument or use --password=''",
+    describe: "Password for the user. To input the password manually, use -p '' or --password=''",
     default: "mariadb",
     type: "string",
     requiresArg: true,
@@ -49,7 +49,7 @@ program
     describe:
       "List of MaxScale hosts. The hosts must be in " +
       "HOST:PORT format and each value must be separated by a comma.",
-    default: "localhost:8989",
+    default: "127.0.0.1:8989",
     type: "string",
     requiresArg: true,
   })
@@ -156,6 +156,19 @@ program
   .scriptName("maxctrl")
   .command("*", false, {}, function (argv) {
     if (argv._.length == 0) {
+      // No password given, ask it from the command line
+      // TODO: Combine this into the one in common.js
+      if (argv.password == "") {
+        if (process.stdin.isTTY) {
+          argv.password = readlineSync.question("Enter password: ", {
+            hideEchoBack: true,
+          });
+        } else {
+          var line = fs.readFileSync(0);
+          argv.password = line.toString().trim();
+        }
+      }
+
       base_opts = [
         "--user=" + argv.user,
         "--password=" + argv.password,

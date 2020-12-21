@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -157,6 +157,14 @@ public:
     const std::string& remote() const
     {
         return m_remote;
+    }
+
+    /**
+     * @return The host of the client that created this DCB.
+     */
+    const std::string& client_remote() const
+    {
+        return m_client_remote;
     }
 
     /**
@@ -643,6 +651,8 @@ protected:
     const uint64_t    m_uid;                        /**< Unique identifier for this DCB */
     int               m_fd;                         /**< The descriptor */
     const std::string m_remote;                     /**< The remote host */
+    const std::string m_client_remote;              /**< The host of the client that created this connection
+                                                     * */
     const Role        m_role;                       /**< The role of the DCB */
     MXS_SESSION*      m_session;                    /**< The owning session */
     Handler*          m_handler;                    /**< The event handler of the DCB */

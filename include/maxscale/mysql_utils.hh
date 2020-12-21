@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -26,12 +26,13 @@
  *
  * @param con    A valid MYSQL structure.
  * @param server The server on which the MySQL engine is running.
+ * @param port   The port to connect to
  * @param user   The MySQL login ID.
  * @param passwd The password for the user.
  *
  * @return New connection or NULL on error
  */
-MYSQL* mxs_mysql_real_connect(MYSQL* mysql, SERVER* server, const char* user, const char* passwd);
+MYSQL* mxs_mysql_real_connect(MYSQL* con, SERVER* server, int port, const char* user, const char* passwd);
 
 /**
  * Execute a query using global query retry settings.

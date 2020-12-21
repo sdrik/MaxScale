@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -53,7 +53,7 @@ int main(int argc, char** argv)
     const char READ_ONLY_OFF[] = "SET GLOBAL read_only=0;";
     test.repl->connect();
     const int FIRST_MOD_NODE = 2;   // Modify nodes 2 & 3
-    const int NODE_COUNT = test.repl->N;
+    const int NODE_COUNT = 4;
     MYSQL** nodes = test.repl->nodes;
 
     for (int i = FIRST_MOD_NODE; i < NODE_COUNT; i++)

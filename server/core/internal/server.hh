@@ -4,7 +4,7 @@
  * Use of this software is governed by the Business Source License included
  * in the LICENSE.TXT file and at www.mariadb.com/bsl11.
  *
- * Change Date: 2024-08-24
+ * Change Date: 2024-11-26
  *
  * On the date above, in accordance with the Business Source License, use
  * of this software will be governed by version 2 or later of the General
@@ -175,8 +175,10 @@ public:
      * Must be done in the admin thread.
      *
      * @param params New parameters that have been validated
+     *
+     * @return True if the configuration was successful
      */
-    void configure(const mxs::ConfigParameters& params);
+    bool configure(const mxs::ConfigParameters& params);
 
     /**
      * Configure the server from JSON
@@ -184,8 +186,10 @@ public:
      * Must be done in the admin thread.
      *
      * @param params JSON parameters that have been validated
+     *
+     * @return True if the configuration was successful
      */
-    void configure(json_t* json);
+    bool configure(json_t* json);
 
     /**
      * Print server details to a DCB
@@ -434,6 +438,8 @@ private:
      * @param server Server to clean up
      */
     void cleanup_persistent_connections() const;
+
+    bool configure_ssl(const mxs::ConfigParameters& params);
 };
 
 // A connection to a server
