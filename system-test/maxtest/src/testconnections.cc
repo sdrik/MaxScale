@@ -164,10 +164,6 @@ TestConnections::TestConnections(int argc, char* argv[])
         exit(0);
     }
     if (maxscale::require_columnstore)
-    {
-        cout << "ColumnStore testing is not yet implemented, skipping test" << endl;
-        exit(0);
-    }
 
     set_template_and_labels();
     tprintf("Test: '%s', config template: '%s', labels: '%s'",
