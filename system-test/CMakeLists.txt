@@ -9,8 +9,8 @@
 #     REPL_BACKEND
 #     GALERA_BACKEND
 #     EXTERN_BACKEND
-#     CS_BACKEND
 #     COLUMNSTORE_BACKEND
+#     XPAND_BACKEND
 #     BREAKS_REPL
 #     BREAKS_GALERA
 set(CTEST_BUILD_NAME "${BUILDNAME}")
@@ -1094,20 +1094,9 @@ add_test_executable(mxs2441_galera_slaves.cpp mxs2441_galera_slaves mxs2441_gale
 # END: Galera tests                        #
 ############################################
 
-############################################
-# BEGIN: ColumnStore tests                 #
-############################################
-
-# MXS-2146: Add test case for csmon
-# https://jira.mariadb.org/browse/MXS-2146
-add_test_executable(csmon_test.cpp csmon_test csmon_test LABELS csmon CS_BACKEND)
 
 ############################################
-# END: ColumnStore tests                   #
-############################################
-
-############################################
-# BEGIN: tests for Xpand monitor        #
+# BEGIN: tests for Xpand monitor           #
 ############################################
 
 # creates Xpand cluster and connect Maxscale to it
@@ -1123,17 +1112,21 @@ set_tests_properties(xpand_transaction_replay PROPERTIES TIMEOUT 7200)
 add_test_executable(xpand_distribution.cpp xpand_distribution xpand_distribution LABELS XPAND_BACKEND)
 
 ############################################
-# END: tests for Xpand monitor          #
+# END: tests for Xpand monitor             #
 ############################################
 
-############################################
-# BEGIN: tests for Columnstore monitor        #
-############################################
-
-add_test_executable(columnstore_proto.cpp columnstore_proto replication LABELS COLUMNSTORE_BACKEND)
 
 ############################################
-# END: tests for Columnstore monitor          #
+# BEGIN: tests for Columnstore monitor     #
+############################################
+
+# MXS-2146: Add test case for csmon
+# https://jira.mariadb.org/browse/MXS-2146
+add_test_executable(csmon_test.cpp csmon_test csmon_test LABELS csmon COLUMNSTORE_BACKEND)
+add_test_executable(columnstore_proto.cpp columnstore_proto csmon_test LABELS COLUMNSTORE_BACKEND)
+
+############################################
+# END: tests for Columnstore monitor       #
 ############################################
 
 ###############################

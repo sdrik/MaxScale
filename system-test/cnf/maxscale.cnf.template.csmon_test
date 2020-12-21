@@ -4,7 +4,7 @@ threads=###threads###
 [CS-Monitor]
 type=monitor
 module=csmon
-servers=server1,server2,server3,server4
+servers=server1,server2,server3
 user=maxskysql
 password=skysql
 monitor_interval=1000
@@ -13,7 +13,7 @@ primary=server1
 [RW-Split-Router]
 type=service
 router=readwritesplit
-servers=server1,server2,server3,server4
+servers=server1,server2,server3
 user=maxskysql
 password=skysql
 
@@ -25,24 +25,19 @@ port=4006
 
 [server1]
 type=server
-address=###node_server_IP_1###
-port=###node_server_port_1###
+address=###columnstore__server_IP_1###
+port=###columnstore__server_port_1###
 protocol=MariaDBBackend
 
 [server2]
 type=server
-address=###node_server_IP_2###
-port=###node_server_port_2###
+address=###columnstore__server_IP_2###
+port=###columnstore__server_port_2###
 protocol=MariaDBBackend
 
 [server3]
 type=server
-address=###node_server_IP_3###
-port=###node_server_port_3###
+address=###columnstore_server_IP_3###
+port=###columnstore__server_port_3###
 protocol=MariaDBBackend
 
-[server4]
-type=server
-address=###node_server_IP_4###
-port=###node_server_port_4###
-protocol=MariaDBBackend
