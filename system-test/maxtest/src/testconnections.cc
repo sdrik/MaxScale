@@ -1959,7 +1959,7 @@ int TestConnections::process_mdbci_template()
     string box = envvar_get_set("box", "centos_7_libvirt");
     string backend_box = envvar_get_set("backend_box", "%s", box.c_str());
     envvar_get_set("xpand_box", "%s", backend_box.c_str());
-    envvar_get_set("clustrix_box", "%s", backend_box.c_str());
+    envvar_get_set("columnstore_box", "%s", backend_box.c_str());
     envvar_get_set("target", "develop");
     envvar_get_set("vm_memory", "2048");
 
