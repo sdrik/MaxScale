@@ -21,6 +21,7 @@
 #include <string>
 #include <maxtest/mariadb_nodes.hh>
 #include <maxtest/nodes.hh>
+#include <maxtest/mariadb_func.hh>
 
 #define CLUSTRIX_DEPS_YUM "yum install -y bzip2 wget screen ntp ntpdate vim htop mdadm"
 #define WGET_CLUSTRIX     "wget http://files.clustrix.com/releases/software/clustrix-9.1.4.el7.tar.bz2"
@@ -31,9 +32,9 @@ class Columnstore_nodes : public Mariadb_nodes
 {
 public:
 
-    Columnstore_nodes(const char* pref, const char* test_cwd, bool verbose, std::string network_config)
-        : Mariadb_nodes(pref, test_cwd, verbose, network_config)
-    {
-    }
+    Columnstore_nodes(const char *pref, const char *test_cwd, bool verbose, const std::string& network_config):
+        Mariadb_nodes(pref, test_cwd, verbose, network_config) { }
+
+    virtual int start_replication();
 
 };
