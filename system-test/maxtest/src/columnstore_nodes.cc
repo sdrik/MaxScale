@@ -27,15 +27,18 @@ using std::string;
 
 int Columnstore_nodes::start_replication()
 {
-    for (int i = 0; i < N; i++)
-    {
-        if (start_node(i, (char*) ""))
-        {
-            printf("Start of node %d failed\n", i);
-            return 1;
-        }
-
-        create_users(i);
-    }
     return 0;
+}
+
+int Columnstore_nodes::check_replication()
+{
+    return(connect());
+}
+
+
+int Columnstore_nodes::fix_replication()
+{
+    unblock_all_nodes();
+    prepare_servers();
+    return(start_replication());
 }

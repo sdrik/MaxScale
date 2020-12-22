@@ -2289,7 +2289,7 @@ bool TestConnections::initialize_nodes()
         columnstore->set_use_ipv6(false);
         columnstore->take_snapshot_command = m_take_snapshot_command.c_str();
         columnstore->revert_snapshot_command = m_revert_snapshot_command.c_str();
-        //columnstore->fix_replication();
+        columnstore->fix_replication();
     }
     else
     {

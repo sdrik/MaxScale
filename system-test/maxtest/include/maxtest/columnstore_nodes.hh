@@ -36,5 +36,7 @@ public:
         Mariadb_nodes(pref, test_cwd, verbose, network_config) { }
 
     virtual int start_replication();
+    virtual int check_replication();
+    virtual int fix_replication();
 
 };
