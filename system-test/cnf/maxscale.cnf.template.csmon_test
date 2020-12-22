@@ -1,5 +1,6 @@
 [maxscale]
 threads=###threads###
+local_address=###local_address###
 
 [CS-Monitor]
 type=monitor
@@ -8,7 +9,8 @@ servers=server1,server2,server3
 user=maxskysql
 password=skysql
 monitor_interval=1000
-primary=server1
+#primary=server1
+version=1.5
 
 [RW-Split-Router]
 type=service
@@ -25,19 +27,19 @@ port=4006
 
 [server1]
 type=server
-address=###columnstore__server_IP_1###
-port=###columnstore__server_port_1###
+address=###columnstore_server_IP_1###
+port=###columnstore_server_port_1###
 protocol=MariaDBBackend
 
 [server2]
 type=server
-address=###columnstore__server_IP_2###
-port=###columnstore__server_port_2###
+address=###columnstore_server_IP_2###
+port=###columnstore_server_port_2###
 protocol=MariaDBBackend
 
 [server3]
 type=server
 address=###columnstore_server_IP_3###
-port=###columnstore__server_port_3###
+port=###columnstore_server_port_3###
 protocol=MariaDBBackend
 

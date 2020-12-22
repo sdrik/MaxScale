@@ -526,14 +526,18 @@ void TestConnections::process_template(int m, const string& cnf_template_path, c
     sprintf(str, "sed -i \"s/###threads###/%d/\"  maxscale.cnf", m_threads);
     system(str);
 
-    Mariadb_nodes* mdn[4];
+    sprintf(str, "sed -i \"s/###local_address###/%s/\"  maxscale.cnf", maxscales->ip(m));
+    system(str);
+
+    int mdn_n = 4;
+    Mariadb_nodes* mdn[mdn_n];
     const char* IPcnf;
     mdn[0] = repl;
     mdn[1] = galera;
     mdn[2] = xpand;
     mdn[3] = columnstore;
     int i, j;
-    int mdn_n = 3;
+
 
     for (j = 0; j < mdn_n; j++)
     {

@@ -27,6 +27,7 @@ using std::string;
 
 int Columnstore_nodes::start_replication()
 {
+    create_users();
     return 0;
 }
 
