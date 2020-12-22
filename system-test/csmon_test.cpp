@@ -20,19 +20,19 @@ int main(int argc, char* argv[])
 
     // Master failures are detected
     test.maxscales->connect();
-    test.repl->block_node(0);
+    test.columnstore->block_node(0);
     test.expect(execute_query_silent(test.maxscales->conn_rwsplit[0], "SELECT @@last_insert_id") != 0,
                 "Query should fail when the master is blocked");
-    test.repl->unblock_node(0);
+    test.columnstore->unblock_node(0);
     test.maxscales->disconnect();
 
     // Slave failures are detected
     test.maxscales->connect();
-    test.repl->block_node(1);
+    test.columnstore->block_node(1);
     test.maxscales->wait_for_monitor();
     auto backup_slave = get_row(test.maxscales->conn_rwsplit[0], "SELECT @@server_id");
     test.expect(backup_slave == master, "Query should go to the master when the slave is down");
-    test.repl->unblock_node(1);
+    test.columnstore->unblock_node(1);
     test.maxscales->disconnect();
 
     return test.global_result;
