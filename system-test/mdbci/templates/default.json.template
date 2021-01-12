@@ -441,10 +441,13 @@
             {
                 "name": "${product}",
                 "version": "${version}",
-		"cnf_template": "server1.cnf"
+                "cnf_template": "cs1.cnf"
             },
             {
                 "name": "plugin_columnstore"
+            },
+            {
+                "name": "plugin_cmapi"
             }
         ],
 	"cnf_template_path": "${cnf_path}",
@@ -462,10 +465,13 @@
             {
                 "name": "${product}",
                 "version": "${version}",
-		"cnf_template": "server2.cnf"
+                "cnf_template": "cs2.cnf"
             },
             {
                 "name": "plugin_columnstore"
+            },
+            {
+                "name": "plugin_cmapi"
             }
         ],
 	"cnf_template_path": "${cnf_path}",
@@ -483,10 +489,13 @@
             {
                 "name": "${product}",
                 "version": "${version}",
-		"cnf_template": "server3.cnf"
+                "cnf_template": "cs3.cnf"
             },
             {
                 "name": "plugin_columnstore"
+            },
+            {
+                "name": "plugin_cmapi"
             }
         ],
 	"cnf_template_path": "${cnf_path}",

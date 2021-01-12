@@ -1951,6 +1951,10 @@ int TestConnections::call_mdbci(const char* options)
     {
         maxscales->read_basic_env();
     }
+    if (columnstore)
+    {
+        columnstore->read_basic_env();
+    }
     return 0;
 }
 
