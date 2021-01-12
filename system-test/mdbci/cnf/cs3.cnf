@@ -1,0 +1,22 @@
+[server]
+
+
+[mysqld]
+log-slave-updates
+plugin_maturity=unknown
+log-bin=mar-bin
+binlog-format=row
+binlog_row_image=full
+server_id=3
+user=mysql
+
+character_set_server=utf8
+collation_server=utf8_general_ci
+columnstore_use_import_for_batchinsert=always
+gtid_strict_mode=ON.
+log_slave_updates=ON.
+
+## x001
+max_long_data_size=1000000000
+innodb_log_file_size=2000000000
+slave-skip-errors=all
