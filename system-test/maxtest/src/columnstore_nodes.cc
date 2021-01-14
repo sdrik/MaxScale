@@ -43,3 +43,10 @@ int Columnstore_nodes::fix_replication()
     prepare_servers();
     return(start_replication());
 }
+
+std::string Columnstore_nodes::get_config_name(int node)
+{
+    std::stringstream ss;
+    ss << "cs" << node + 1 << ".cnf";
+    return ss.str();
+}

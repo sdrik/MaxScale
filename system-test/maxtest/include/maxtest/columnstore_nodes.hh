@@ -32,11 +32,21 @@ class Columnstore_nodes : public Mariadb_nodes
 {
 public:
 
-    Columnstore_nodes(const char *pref, const char *test_cwd, bool verbose, const std::string& network_config):
-        Mariadb_nodes(pref, test_cwd, verbose, network_config) { }
+    Columnstore_nodes(SharedData& shared, const std::string& network_config)
+        : Mariadb_nodes("columnstore", shared, network_config, Type::COLUMNSTORE)
+    {
+    }
 
     virtual int start_replication();
     virtual int check_replication();
     virtual int fix_replication();
+    /**
+     * Get the configuration file name for a particular node
+     *
+     * @param node Node number for which the configuration is requested
+     *
+     * @return The name of the configuration file
+     */
+    virtual std::string get_config_name(int node);
 
 };

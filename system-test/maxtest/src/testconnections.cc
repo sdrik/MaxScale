@@ -2296,7 +2296,7 @@ bool TestConnections::initialize_nodes()
     
     if (use_columnstore)
     {
-        columnstore = new Columnstore_nodes("columnstore", test_dir, verbose, m_network_config);
+        columnstore = new Columnstore_nodes(m_shared, m_network_config);
         columnstore->setup();
         columnstore->set_use_ipv6(false);
         columnstore->take_snapshot_command = m_take_snapshot_command.c_str();
