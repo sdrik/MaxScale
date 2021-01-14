@@ -37,7 +37,7 @@ public:
     {
     }
 
-    virtual int start_replication();
+    //virtual int start_replication();
     virtual int check_replication();
     virtual int fix_replication();
     /**

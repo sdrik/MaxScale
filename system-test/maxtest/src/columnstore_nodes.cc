@@ -25,11 +25,13 @@ using std::cout;
 using std::endl;
 using std::string;
 
+/*
 int Columnstore_nodes::start_replication()
 {
     create_users();
     return 0;
 }
+*/
 
 int Columnstore_nodes::check_replication()
 {
@@ -41,6 +43,11 @@ int Columnstore_nodes::fix_replication()
 {
     unblock_all_nodes();
     prepare_servers();
+    for (int i = 0; i < N; i++)
+    {
+        ssh_node(i, "service mariadb-columnstore start", true);
+        ssh_node(i, "service mariadb-columnstore-cmapi start", true);
+    }
     return(start_replication());
 }
 
