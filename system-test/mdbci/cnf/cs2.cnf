@@ -11,8 +11,8 @@ user=mysql
 character_set_server=utf8
 collation_server=utf8_general_ci
 columnstore_use_import_for_batchinsert=always
-gtid_strict_mode=ON.
-log_slave_updates=ON.
+gtid_strict_mode=ON
+log_slave_updates=ON
 
 ## x001
 max_long_data_size=1000000000
