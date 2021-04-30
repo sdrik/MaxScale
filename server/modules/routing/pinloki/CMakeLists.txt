@@ -1,6 +1,6 @@
 # Boost 1.73
 ExternalProject_Add(boost
-  URL "${CMAKE_CURRENT_SOURCE_DIR}/boost-1.73.0.tar.gz"
+  URL "https://boostorg.jfrog.io/artifactory/main/release/1.76.0/source/boost_1_76_0.tar.gz"
   SOURCE_DIR ${CMAKE_BINARY_DIR}/boost/
   BINARY_DIR ${CMAKE_BINARY_DIR}/boost/
   CONFIGURE_COMMAND ""
