@@ -74,6 +74,7 @@ then
        uuid-dev libsqlite3-dev liblzma-dev libpam0g-dev pkg-config \
        libedit-dev libcurl4-openssl-dev libatomic1 \
        libsasl2-dev libxml2-dev libkrb5-dev
+  ${apt_cmd} install unzip
 
   # One of these will work, older systems use libsystemd-daemon-dev
   ${apt_cmd} install libsystemd-dev || \
@@ -121,6 +122,7 @@ then
 
     # Attempt to install systemd-devel, doesn't work on CentOS 6
     sudo yum install -y systemd-devel
+    sudo yum install -y unzip
 
     # Enable the devtoolkit to get a newer compiler
 
@@ -165,6 +167,7 @@ then
          gnutls-devel libgcrypt-devel pam-devel systemd-devel libcurl-devel libatomic1 \
          cyrus-sasl-devel libxml2-devel krb5-devel
     sudo zypper -n install rpm-build
+    sudo zypper -n install unzip
     cat /etc/*-release | grep "SUSE Linux Enterprise Server 11"
 
     if [ $? != 0 ]
@@ -188,6 +191,18 @@ verlt() {
 }
 
 # cmake
+
+lscpu | grep Arc | grep aarch64
+if [ $? == 0 ]; then
+    cmake_version="3.20.2"
+    wget wget https://github.com/Kitware/CMake/releases/download/v${cmake_version}/cmake-${cmake_version}.zip
+    unzip cmake-${cmake_version}.zip
+    cd cmake-${cmake_version}
+    ./bootstrap
+    make
+    sudo make install
+fi
+
 cmake_vrs_cmd="cmake --version"
 cmake_version_ok=0
 cmake_version_required="3.16.0"
