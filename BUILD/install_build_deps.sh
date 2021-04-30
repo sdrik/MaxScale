@@ -194,7 +194,7 @@ verlt() {
 
 lscpu | grep Arc | grep aarch64
 if [ $? == 0 ]; then
-    cmake_version="3.16.8"
+    cmake_version="3.20.2"
     wget wget https://github.com/Kitware/CMake/releases/download/v${cmake_version}/cmake-${cmake_version}.zip
     unzip cmake-${cmake_version}.zip
     cd cmake-${cmake_version}
