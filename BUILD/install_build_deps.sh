@@ -293,9 +293,16 @@ sudo make install
 popd
 
 
-
-wget --quiet https://nodejs.org/dist/v10.20.0/node-v10.20.0-linux-x64.tar.gz
-tar -axf node-v10.20.0-linux-x64.tar.gz
-sudo cp -t /usr -r node-v10.20.0-linux-x64/*
+lscpu | grep Arc | grep aarch64
+if [ $? == 0 ]; then
+    node_version="14.16.1"
+    wget --quiet https://nodejs.org/dist/v${node_version}/node-v${node_version}-linux-arm64.tar.xz
+    tar xvf node-v${node_version}-linux-arm64.tar.xz
+    sudo cp -t /usr -r node-v${node_version}-linux-arm64/*
+else
+    wget --quiet https://nodejs.org/dist/v10.20.0/node-v10.20.0-linux-x64.tar.gz
+    tar -axf node-v10.20.0-linux-x64.tar.gz
+    sudo cp -t /usr -r node-v10.20.0-linux-x64/*
+fi
 
 sudo rm -rf $tmpdir
