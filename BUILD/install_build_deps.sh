@@ -160,6 +160,7 @@ then
         sudo yum -y install devtoolset-7-libasan-devel
         # Enable it by default
         echo "source /opt/rh/devtoolset-7/enable" >> ~/.bashrc
+        source /opt/rh/devtoolset-7/enable
     else
         # CentOS 8 only needs ASAN
         sudo yum -y install libasan-devel
