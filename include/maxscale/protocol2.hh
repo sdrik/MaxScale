@@ -129,6 +129,15 @@ public:
         return nullptr;
     }
 
+    /**
+     * Listener calls this during its creation right after
+     * @param manager
+     */
+    virtual void user_account_manager_created(mxs::UserAccountManager* manager)
+    {
+        ;
+    }
+
     virtual uint64_t capabilities() const
     {
         return 0;

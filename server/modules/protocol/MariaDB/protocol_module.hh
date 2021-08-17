@@ -40,6 +40,7 @@ public:
     std::string name() const override;
 
     std::unique_ptr<mxs::UserAccountManager> create_user_data_manager() override;
+    void user_account_manager_created(mxs::UserAccountManager* manager) override;
 
     AuthenticatorList create_authenticators(const mxs::ConfigParameters& params) override;
 
@@ -47,10 +48,13 @@ private:
     MySQLProtocolModule(const std::string& name);
     bool parse_auth_options(const std::string& opts, mxs::ConfigParameters* params_out);
     bool read_authentication_options(mxs::ConfigParameters* params);
+    bool read_custom_user_options(mxs::ConfigParameters* params);
 
     /** Partial user search settings. These settings originate from the listener and do not
      * change once set. */
     mariadb::UserSearchSettings::Listener m_user_search_settings;
+
+    std::unique_ptr<mariadb::UserEntry> m_custom_entry;
 
     // This is needed for the getConfiguration entry point
     mxs::config::Configuration m_config;
