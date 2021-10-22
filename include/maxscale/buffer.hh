@@ -86,11 +86,11 @@ private:
  * shared between multiple GWBUF's without the need to make multiple copies
  * but still maintain separate data pointers.
  */
-class SHARED_BUF
+class Payload
 {
 public:
-    explicit SHARED_BUF(size_t len)
-        : data(len)
+    explicit Payload(size_t len)
+        : m_data(len)
     {
     }
 
@@ -109,9 +109,14 @@ public:
         return get_parse_data();
     }
 
-    std::vector<uint8_t> data;                      /*< Actual memory that was allocated */
+    std::vector<uint8_t>& data()
+    {
+        return m_data;
+    }
+
 private:
-    ParseData m_parse_data;
+    std::vector<uint8_t> m_data;
+    ParseData            m_parse_data;
 };
 
 /**
@@ -127,13 +132,10 @@ class GWBUF
 public:
     using HintVector = std::vector<Hint>;
 
-    GWBUF*   next {nullptr};    /*< Next buffer in a linked chain of buffers */
-    GWBUF*   tail {nullptr};    /*< Last buffer in a linked chain of buffers */
-    uint8_t* start {nullptr};   /*< Start of the valid data */
-    uint8_t* end {nullptr};     /*< First byte after the valid data */
-
-    std::shared_ptr<SHARED_BUF> sbuf;   /*< The shared buffer with the real data */
-
+    GWBUF*     next {nullptr};                      /*< Next buffer in a linked chain of buffers */
+    GWBUF*     tail {nullptr};                      /*< Last buffer in a linked chain of buffers */
+    uint8_t*   start {nullptr};                     /*< Start of the valid data */
+    uint8_t*   end {nullptr};                       /*< First byte after the valid data */
     HintVector hints;                               /*< Hint data for this buffer */
     uint32_t   gwbuf_type {GWBUF_TYPE_UNDEFINED};   /*< buffer's data type information */
     uint32_t   id {0};                              /*< Unique ID for this buffer, 0 if no ID
@@ -144,12 +146,28 @@ public:
 
     const std::string& get_sql() const;
 
+    void set_parse_data(void* data, ParseDataCleanupFct fct)
+    {
+        m_payload->set_parse_data(data, fct);
+    }
+
+    void* get_parse_data() const
+    {
+        return m_payload->get_parse_data();
+    }
+
+    bool is_parsed() const
+    {
+        return m_payload->is_parsed();
+    }
+
     explicit GWBUF(uint64_t size);
     explicit GWBUF(const GWBUF& rhs);
 
     GWBUF(GWBUF&&) = delete;
 private:
-    mutable std::string m_sql;
+    std::shared_ptr<Payload> m_payload;
+    mutable std::string      m_sql;
 };
 
 inline bool gwbuf_is_type_undefined(const GWBUF* b)

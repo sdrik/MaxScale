@@ -356,18 +356,11 @@ bool use_cached_result()
     return this_unit.cache_max_size() != 0 && this_thread.use_cache;
 }
 
-bool has_not_been_parsed(GWBUF* pStmt)
-{
-    // A GWBUF has not been parsed, if it does not have a parsing info object attached.
-    return !pStmt->sbuf->get_parse_data();
-}
-
 void info_object_close(void* pData)
 {
     mxb_assert(this_unit.classifier);
     this_unit.classifier->qc_info_close(static_cast<QC_STMT_INFO*>(pData));
 }
-
 
 /**
  * @class QCInfoCacheScope
@@ -390,7 +383,7 @@ public:
     QCInfoCacheScope(GWBUF* pStmt)
         : m_pStmt(pStmt)
     {
-        if (has_not_been_parsed(m_pStmt) && use_cached_result())
+        if (!m_pStmt->is_parsed() && use_cached_result())
         {
             mxb_assert(gwbuf_is_contiguous(m_pStmt));
 
@@ -409,7 +402,7 @@ public:
 
             if (pInfo)
             {
-                m_pStmt->sbuf->set_parse_data(pInfo, info_object_close);
+                m_pStmt->set_parse_data(pInfo, info_object_close);
                 m_canonical.clear();    // Signals that nothing needs to be added in the destructor.
             }
         }
@@ -419,7 +412,7 @@ public:
     {
         if (!m_canonical.empty())
         {
-            void* pData = m_pStmt->sbuf->get_parse_data();
+            void* pData = m_pStmt->get_parse_data();
             mxb_assert(pData);
             QC_STMT_INFO* pInfo = static_cast<QC_STMT_INFO*>(pData);
 

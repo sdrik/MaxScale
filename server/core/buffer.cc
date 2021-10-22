@@ -134,23 +134,23 @@ const std::string& GWBUF::get_sql() const
 }
 
 GWBUF::GWBUF(uint64_t size)
-    : sbuf(std::make_shared<SHARED_BUF>(size))
+    : m_payload(std::make_shared<Payload>(size))
 {
 #ifdef SS_DEBUG
     owner = RoutingWorker::get_current_id();
 #endif
     tail = this;
-    start = &sbuf->data.front();
+    start = &m_payload->data().front();
     end = start + size;
 }
 
 GWBUF::GWBUF(const GWBUF& rhs)
     : start(rhs.start)
     , end(rhs.end)
-    , sbuf(rhs.sbuf)
     , hints(rhs.hints)
     , gwbuf_type(rhs.gwbuf_type)
     , id(rhs.id)
+    , m_payload(rhs.m_payload)
 {
 #ifdef SS_DEBUG
     owner = RoutingWorker::get_current_id();

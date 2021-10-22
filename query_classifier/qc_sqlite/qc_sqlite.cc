@@ -283,7 +283,7 @@ public:
 
         if (ensure_query_is_parsed(pStmt, collect))
         {
-            pInfo = (QcSqliteInfo*) pStmt->sbuf->get_parse_data();
+            pInfo = (QcSqliteInfo*) pStmt->get_parse_data();
             mxb_assert(pInfo);
         }
 
@@ -3837,7 +3837,7 @@ static bool parse_query(GWBUF* query, uint32_t collect)
             {
                 bool suppress_logging = false;
 
-                QcSqliteInfo* pInfo = (QcSqliteInfo*) query->sbuf->get_parse_data();
+                QcSqliteInfo* pInfo = (QcSqliteInfo*) query->get_parse_data();
 
                 if (pInfo)
                 {
@@ -3865,7 +3865,7 @@ static bool parse_query(GWBUF* query, uint32_t collect)
                     if (pInfo)
                     {
                         // TODO: Add return value to gwbuf_add_buffer_object.
-                        query->sbuf->set_parse_data(pInfo, buffer_object_free);
+                        query->set_parse_data(pInfo, buffer_object_free);
                     }
                 }
 
@@ -3923,11 +3923,11 @@ static bool parse_query(GWBUF* query, uint32_t collect)
 
 static bool query_is_parsed(GWBUF* query, uint32_t collect)
 {
-    bool rc = query && query->sbuf->is_parsed();
+    bool rc = query && query->is_parsed();
 
     if (rc)
     {
-        QcSqliteInfo* pInfo = (QcSqliteInfo*) query->sbuf->get_parse_data();
+        QcSqliteInfo* pInfo = (QcSqliteInfo*) query->get_parse_data();
         mxb_assert(pInfo);
 
         if ((~pInfo->m_collected & collect) != 0)
