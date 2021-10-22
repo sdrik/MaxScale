@@ -26,13 +26,6 @@
 
 using mxs::RoutingWorker;
 
-struct buffer_object_t
-{
-    bufobj_id_t bo_id;
-    void*       bo_data;
-    void        (* bo_donefun_fp)(void*);
-};
-
 static void             gwbuf_free_one(GWBUF* buf);
 static buffer_object_t* gwbuf_remove_buffer_object(GWBUF* buf, buffer_object_t* bufobj);
 
@@ -213,15 +206,6 @@ static void gwbuf_free_one(GWBUF* buf)
     ensure_owned(buf);
 
     delete buf;
-}
-
-SHARED_BUF::~SHARED_BUF()
-{
-    if (bufobj)
-    {
-        bufobj->bo_donefun_fp(bufobj->bo_data);
-        MXS_FREE(bufobj);
-    }
 }
 
 /**
@@ -574,31 +558,24 @@ void gwbuf_set_type(GWBUF* buf, uint32_t type)
 }
 
 void gwbuf_add_buffer_object(GWBUF* buf,
-                             bufobj_id_t id,
                              void* data,
                              void (* donefun_fp)(void*))
 {
     validate_buffer(buf);
-    mxb_assert(buf->sbuf->bufobj == nullptr);
+    mxb_assert(buf->sbuf->bufobj.data() == nullptr);
 
-    buffer_object_t* newb = (buffer_object_t*)MXS_MALLOC(sizeof(buffer_object_t));
-    MXS_ABORT_IF_NULL(newb);
+    buf->sbuf->bufobj = buffer_object_t(data, donefun_fp);
 
-    newb->bo_id = id;
-    newb->bo_data = data;
-    newb->bo_donefun_fp = donefun_fp;
-
-    buf->sbuf->bufobj = newb;
 
     /** Set flag */
     buf->sbuf->info |= GWBUF_INFO_PARSED;
 }
 
-void* gwbuf_get_buffer_object_data(GWBUF* buf, bufobj_id_t id)
+void* gwbuf_get_buffer_object_data(GWBUF* buf)
 {
     validate_buffer(buf);
 
-    return buf->sbuf->bufobj ? buf->sbuf->bufobj->bo_data : nullptr;
+    return buf->sbuf->bufobj.data();
 }
 
 void gwbuf_set_id(GWBUF* buffer, uint32_t id)

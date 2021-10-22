@@ -43,18 +43,47 @@ enum  gwbuf_info_t
     GWBUF_INFO_PARSED = 0x1
 };
 
-/**
- * A structure for cleaning up memory allocations of structures which are
- * referred to by GWBUF and deallocated in gwbuf_free but GWBUF doesn't
- * know what they are.
- * All functions on the list are executed before freeing memory of GWBUF struct.
- */
-enum bufobj_id_t
+class buffer_object_t
 {
-    GWBUF_PARSING_INFO
-};
+public:
+    buffer_object_t()
+        : bo_data(nullptr)
+        , bo_donefun_fp(nullptr)
+    {
+    }
 
-struct buffer_object_t;
+    buffer_object_t(void* data, void (*donefun_fp)(void*))
+        : bo_data(data)
+        , bo_donefun_fp(donefun_fp)
+    {
+    }
+
+    buffer_object_t& operator=(buffer_object_t&& rhs)
+    {
+        bo_data = rhs.bo_data;
+        bo_donefun_fp = rhs.bo_donefun_fp;
+        rhs.bo_data = nullptr;
+        rhs.bo_donefun_fp = nullptr;
+
+        return *this;
+    }
+
+    ~buffer_object_t()
+    {
+        if (bo_donefun_fp)
+        {
+            bo_donefun_fp(bo_data);
+        }
+    }
+
+    void* data() const
+    {
+        return bo_data;
+    }
+private:
+    void* bo_data;
+    void  (* bo_donefun_fp)(void*);
+};
 
 /**
  * A structure to encapsulate the data in a form that the data itself can be
@@ -68,11 +97,9 @@ public:
         : data(len)
     {
     }
-    buffer_object_t*     bufobj = nullptr;      /*< List of objects referred to by GWBUF */
+    buffer_object_t      bufobj;                /*< List of objects referred to by GWBUF */
     uint32_t             info = GWBUF_INFO_NONE;/*< Info bits */
     std::vector<uint8_t> data;                  /*< Actual memory that was allocated */
-
-    ~SHARED_BUF();
 };
 
 /**
@@ -399,7 +426,6 @@ extern GWBUF* gwbuf_make_contiguous(GWBUF* buf);
  * @param donefun_fp  Clean-up function to be executed before buffer is freed.
  */
 void gwbuf_add_buffer_object(GWBUF* buf,
-                             bufobj_id_t id,
                              void* data,
                              void (* donefun_fp)(void*));
 
@@ -411,7 +437,7 @@ void gwbuf_add_buffer_object(GWBUF* buf,
  *
  * @return Searched buffer object or NULL if not found
  */
-void* gwbuf_get_buffer_object_data(GWBUF* buf, bufobj_id_t id);
+void* gwbuf_get_buffer_object_data(GWBUF* buf);
 #if defined (BUFFER_TRACE)
 extern void dprintAllBuffers(void* pdcb);
 #endif
