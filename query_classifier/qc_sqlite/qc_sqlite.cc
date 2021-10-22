@@ -3923,7 +3923,7 @@ static bool parse_query(GWBUF* query, uint32_t collect)
 
 static bool query_is_parsed(GWBUF* query, uint32_t collect)
 {
-    bool rc = query && gwbuf_is_parsed(query);
+    bool rc = query && query->sbuf->is_parsed();
 
     if (rc)
     {

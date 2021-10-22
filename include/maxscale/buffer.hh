@@ -37,12 +37,6 @@ enum gwbuf_type_t
     GWBUF_TYPE_TRACK_STATE    = (1 << 2),
 };
 
-enum  gwbuf_info_t
-{
-    GWBUF_INFO_NONE   = 0x0,
-    GWBUF_INFO_PARSED = 0x1
-};
-
 using ParseDataCleanupFct = void (*)(void*);
 
 class ParseData
@@ -103,7 +97,6 @@ public:
     void set_parse_data(void* data, ParseDataCleanupFct fct)
     {
         m_parse_data = ParseData(data, fct);
-        info |= GWBUF_INFO_PARSED;
     }
 
     void* get_parse_data() const
@@ -111,8 +104,12 @@ public:
         return m_parse_data.data();
     }
 
-    uint32_t             info = GWBUF_INFO_NONE;/*< Info bits */
-    std::vector<uint8_t> data;                  /*< Actual memory that was allocated */
+    bool is_parsed() const
+    {
+        return get_parse_data();
+    }
+
+    std::vector<uint8_t> data;                      /*< Actual memory that was allocated */
 private:
     ParseData m_parse_data;
 };
@@ -175,11 +172,6 @@ inline bool gwbuf_is_replayed(const GWBUF* b)
 inline bool gwbuf_should_track_state(const GWBUF* b)
 {
     return b->gwbuf_type & GWBUF_TYPE_TRACK_STATE;
-}
-
-inline bool gwbuf_is_parsed(const GWBUF* b)
-{
-    return b->sbuf->info & GWBUF_INFO_PARSED;
 }
 
 /*<
