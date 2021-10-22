@@ -26,8 +26,8 @@
 
 using mxs::RoutingWorker;
 
-static void             gwbuf_free_one(GWBUF* buf);
-static buffer_object_t* gwbuf_remove_buffer_object(GWBUF* buf, buffer_object_t* bufobj);
+static void       gwbuf_free_one(GWBUF* buf);
+static ParseData* gwbuf_remove_buffer_object(GWBUF* buf, ParseData* bufobj);
 
 #if defined (SS_DEBUG)
 inline void invalidate_tail_pointers(GWBUF* head)
@@ -555,27 +555,6 @@ void gwbuf_set_type(GWBUF* buf, uint32_t type)
         buf->gwbuf_type |= type;
         buf = buf->next;
     }
-}
-
-void gwbuf_add_buffer_object(GWBUF* buf,
-                             void* data,
-                             void (* donefun_fp)(void*))
-{
-    validate_buffer(buf);
-    mxb_assert(buf->sbuf->bufobj.data() == nullptr);
-
-    buf->sbuf->bufobj = buffer_object_t(data, donefun_fp);
-
-
-    /** Set flag */
-    buf->sbuf->info |= GWBUF_INFO_PARSED;
-}
-
-void* gwbuf_get_buffer_object_data(GWBUF* buf)
-{
-    validate_buffer(buf);
-
-    return buf->sbuf->bufobj.data();
 }
 
 void gwbuf_set_id(GWBUF* buffer, uint32_t id)

@@ -43,46 +43,48 @@ enum  gwbuf_info_t
     GWBUF_INFO_PARSED = 0x1
 };
 
-class buffer_object_t
+using ParseDataCleanupFct = void (*)(void*);
+
+class ParseData
 {
 public:
-    buffer_object_t()
-        : bo_data(nullptr)
-        , bo_donefun_fp(nullptr)
+    ParseData()
+        : m_pData(nullptr)
+        , m_cleanup(nullptr)
     {
     }
 
-    buffer_object_t(void* data, void (*donefun_fp)(void*))
-        : bo_data(data)
-        , bo_donefun_fp(donefun_fp)
+    ParseData(void* data, ParseDataCleanupFct fct)
+        : m_pData(data)
+        , m_cleanup(fct)
     {
     }
 
-    buffer_object_t& operator=(buffer_object_t&& rhs)
+    ParseData& operator=(ParseData&& rhs)
     {
-        bo_data = rhs.bo_data;
-        bo_donefun_fp = rhs.bo_donefun_fp;
-        rhs.bo_data = nullptr;
-        rhs.bo_donefun_fp = nullptr;
+        m_pData = rhs.m_pData;
+        m_cleanup = rhs.m_cleanup;
+        rhs.m_pData = nullptr;
+        rhs.m_cleanup = nullptr;
 
         return *this;
     }
 
-    ~buffer_object_t()
+    ~ParseData()
     {
-        if (bo_donefun_fp)
+        if (m_cleanup)
         {
-            bo_donefun_fp(bo_data);
+            m_cleanup(m_pData);
         }
     }
 
     void* data() const
     {
-        return bo_data;
+        return m_pData;
     }
 private:
-    void* bo_data;
-    void  (* bo_donefun_fp)(void*);
+    void*               m_pData;
+    ParseDataCleanupFct m_cleanup;
 };
 
 /**
@@ -97,9 +99,22 @@ public:
         : data(len)
     {
     }
-    buffer_object_t      bufobj;                /*< List of objects referred to by GWBUF */
+
+    void set_parse_data(void* data, ParseDataCleanupFct fct)
+    {
+        m_parse_data = ParseData(data, fct);
+        info |= GWBUF_INFO_PARSED;
+    }
+
+    void* get_parse_data() const
+    {
+        return m_parse_data.data();
+    }
+
     uint32_t             info = GWBUF_INFO_NONE;/*< Info bits */
     std::vector<uint8_t> data;                  /*< Actual memory that was allocated */
+private:
+    ParseData m_parse_data;
 };
 
 /**
@@ -417,27 +432,6 @@ extern void gwbuf_set_type(GWBUF* head, uint32_t type);
  */
 extern GWBUF* gwbuf_make_contiguous(GWBUF* buf);
 
-/**
- * Add a buffer object to GWBUF buffer.
- *
- * @param buf         GWBUF where object is added
- * @param id          Type identifier for object
- * @param data        Object data
- * @param donefun_fp  Clean-up function to be executed before buffer is freed.
- */
-void gwbuf_add_buffer_object(GWBUF* buf,
-                             void* data,
-                             void (* donefun_fp)(void*));
-
-/**
- * Search buffer object which matches with the id.
- *
- * @param buf  GWBUF to be searched
- * @param id   Identifier for the object
- *
- * @return Searched buffer object or NULL if not found
- */
-void* gwbuf_get_buffer_object_data(GWBUF* buf);
 #if defined (BUFFER_TRACE)
 extern void dprintAllBuffers(void* pdcb);
 #endif

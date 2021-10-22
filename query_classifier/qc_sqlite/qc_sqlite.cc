@@ -27,6 +27,7 @@
 #include <string>
 #include <vector>
 #include <mutex>
+#include <atomic>
 
 #include <maxbase/alloc.h>
 #include <maxscale/modinfo.hh>
@@ -282,7 +283,7 @@ public:
 
         if (ensure_query_is_parsed(pStmt, collect))
         {
-            pInfo = (QcSqliteInfo*) gwbuf_get_buffer_object_data(pStmt);
+            pInfo = (QcSqliteInfo*) pStmt->sbuf->get_parse_data();
             mxb_assert(pInfo);
         }
 
@@ -3836,7 +3837,7 @@ static bool parse_query(GWBUF* query, uint32_t collect)
             {
                 bool suppress_logging = false;
 
-                QcSqliteInfo* pInfo = (QcSqliteInfo*) gwbuf_get_buffer_object_data(query);
+                QcSqliteInfo* pInfo = (QcSqliteInfo*) query->sbuf->get_parse_data();
 
                 if (pInfo)
                 {
@@ -3864,7 +3865,7 @@ static bool parse_query(GWBUF* query, uint32_t collect)
                     if (pInfo)
                     {
                         // TODO: Add return value to gwbuf_add_buffer_object.
-                        gwbuf_add_buffer_object(query, pInfo, buffer_object_free);
+                        query->sbuf->set_parse_data(pInfo, buffer_object_free);
                     }
                 }
 
@@ -3926,7 +3927,7 @@ static bool query_is_parsed(GWBUF* query, uint32_t collect)
 
     if (rc)
     {
-        QcSqliteInfo* pInfo = (QcSqliteInfo*) query->sbuf->bufobj.data();
+        QcSqliteInfo* pInfo = (QcSqliteInfo*) query->sbuf->get_parse_data();
         mxb_assert(pInfo);
 
         if ((~pInfo->m_collected & collect) != 0)

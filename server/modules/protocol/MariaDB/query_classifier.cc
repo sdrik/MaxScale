@@ -359,7 +359,7 @@ bool use_cached_result()
 bool has_not_been_parsed(GWBUF* pStmt)
 {
     // A GWBUF has not been parsed, if it does not have a parsing info object attached.
-    return gwbuf_get_buffer_object_data(pStmt) == nullptr;
+    return !pStmt->sbuf->get_parse_data();
 }
 
 void info_object_close(void* pData)
@@ -409,7 +409,7 @@ public:
 
             if (pInfo)
             {
-                gwbuf_add_buffer_object(m_pStmt, pInfo, info_object_close);
+                m_pStmt->sbuf->set_parse_data(pInfo, info_object_close);
                 m_canonical.clear();    // Signals that nothing needs to be added in the destructor.
             }
         }
@@ -419,7 +419,7 @@ public:
     {
         if (!m_canonical.empty())
         {
-            void* pData = gwbuf_get_buffer_object_data(m_pStmt);
+            void* pData = m_pStmt->sbuf->get_parse_data();
             mxb_assert(pData);
             QC_STMT_INFO* pInfo = static_cast<QC_STMT_INFO*>(pData);
 
