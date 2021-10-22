@@ -28,10 +28,9 @@ using mxs::RoutingWorker;
 
 struct buffer_object_t
 {
-    bufobj_id_t      bo_id;
-    void*            bo_data;
-    void             (* bo_donefun_fp)(void*);
-    buffer_object_t* bo_next;
+    bufobj_id_t bo_id;
+    void*       bo_data;
+    void        (* bo_donefun_fp)(void*);
 };
 
 static void             gwbuf_free_one(GWBUF* buf);
@@ -218,14 +217,10 @@ static void gwbuf_free_one(GWBUF* buf)
 
 SHARED_BUF::~SHARED_BUF()
 {
-    buffer_object_t* bo = bufobj;
-
-    while (bo != NULL)
+    if (bufobj)
     {
-        auto next = bo->bo_next;
-        bo->bo_donefun_fp(bufobj->bo_data);
-        MXS_FREE(bo);
-        bo = next;
+        bufobj->bo_donefun_fp(bufobj->bo_data);
+        MXS_FREE(bufobj);
     }
 }
 
@@ -584,6 +579,7 @@ void gwbuf_add_buffer_object(GWBUF* buf,
                              void (* donefun_fp)(void*))
 {
     validate_buffer(buf);
+    mxb_assert(buf->sbuf->bufobj == nullptr);
 
     buffer_object_t* newb = (buffer_object_t*)MXS_MALLOC(sizeof(buffer_object_t));
     MXS_ABORT_IF_NULL(newb);
@@ -591,15 +587,9 @@ void gwbuf_add_buffer_object(GWBUF* buf,
     newb->bo_id = id;
     newb->bo_data = data;
     newb->bo_donefun_fp = donefun_fp;
-    newb->bo_next = NULL;
 
-    buffer_object_t** p_b = &buf->sbuf->bufobj;
-    /** Search the end of the list and add there */
-    while (*p_b != NULL)
-    {
-        p_b = &(*p_b)->bo_next;
-    }
-    *p_b = newb;
+    buf->sbuf->bufobj = newb;
+
     /** Set flag */
     buf->sbuf->info |= GWBUF_INFO_PARSED;
 }
@@ -608,14 +598,7 @@ void* gwbuf_get_buffer_object_data(GWBUF* buf, bufobj_id_t id)
 {
     validate_buffer(buf);
 
-    buffer_object_t* bo = buf->sbuf->bufobj;
-
-    while (bo != NULL && bo->bo_id != id)
-    {
-        bo = bo->bo_next;
-    }
-
-    return bo ? bo->bo_data : NULL;
+    return buf->sbuf->bufobj ? buf->sbuf->bufobj->bo_data : nullptr;
 }
 
 void gwbuf_set_id(GWBUF* buffer, uint32_t id)
