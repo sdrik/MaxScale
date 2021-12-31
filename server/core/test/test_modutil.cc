@@ -50,7 +50,7 @@ static int test1()
     mxb_assert_message(0 == modutil_extract_SQL(buffer, &sql, &length), "Default buffer should fail");
     fprintf(stderr, "\t..done\nExtract SQL from buffer different way?");
     fprintf(stderr, "\t..done\nReplace SQL in buffer");
-    mxb_assert_message(0 == modutil_replace_SQL(buffer, (char*)"select * from some_table;"),
+    mxb_assert_message(0 == mariadb::replace_SQL(buffer, "select * from some_table;"),
                        "Default buffer should fail");
     fprintf(stderr, "\t..done\nTidy up.");
     gwbuf_free(buffer);

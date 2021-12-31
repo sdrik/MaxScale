@@ -197,6 +197,8 @@ HeaderData get_header(const uint8_t* buffer);
  */
 uint8_t* write_header(uint8_t* buffer, uint32_t pl_size, uint8_t seq);
 
+uint8_t* write_header(uint8_t* buffer, const HeaderData& header);
+
 /**
  * Same as mempcpy, but for uint8_t*.
  *
@@ -219,6 +221,19 @@ uint8_t* copy_chars(uint8_t* dest, const char* src, size_t n);
  * @return Pointer to next byte
  */
 uint8_t* set_bytes(uint8_t* dest, uint8_t val, size_t n);
+
+/**
+ * Replace the contents of a GWBUF with the new SQL statement passed as a text string.
+ * The routine takes care of the modification needed to the MySQL packet,
+ * returning a GWBUF chain that can be used to send the data to a MySQL server
+ *
+ * @param orig  The original request in a GWBUF
+ * @param sql   The SQL text to replace in the packet
+ * @return A newly formed GWBUF containing the MySQL packet.
+ */
+GWBUF* replace_SQL(GWBUF* orig, const std::string& sql);
+
+GWBUF* replace_SQL(GWBUF* orig, const char* sql, size_t sql_len);
 }
 
 /** MySQL protocol constants */

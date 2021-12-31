@@ -630,6 +630,11 @@ void set_byte8(uint8_t* buffer, uint64_t val)
     memcpy(buffer, &le64, 8);
 }
 
+uint8_t* write_header(uint8_t* buffer, const HeaderData& header)
+{
+    return write_header(buffer, header.pl_length, header.seq);
+}
+
 uint8_t* write_header(uint8_t* buffer, uint32_t pl_size, uint8_t seq)
 {
     mxb_assert(pl_size <= 0xFFFFFF);
@@ -705,5 +710,49 @@ AuthSwitchReqContents parse_auth_switch_request(const mxs::Buffer& input)
     data.resize(datalen);
     gwbuf_copy_data(input.get(), MYSQL_HEADER_LEN, datalen, data.data());
     return packet_parser::parse_auth_switch_request(data);
+}
+
+GWBUF* replace_SQL(GWBUF* orig, const string& sql)
+{
+    return replace_SQL(orig, sql.data(), sql.length());
+}
+
+GWBUF* replace_SQL(GWBUF* orig, const char* sql, size_t sql_len)
+{
+    GWBUF* rval = nullptr;
+    if (modutil_is_SQL(orig))
+    {
+        auto header = mariadb::get_header(orig->start);
+        auto old_sql_len = header.pl_length - 1;// -1 due to cmd byte. SQL text is not 0-term.
+        auto new_sql_len = sql_len;
+        auto sql_start_ptr = orig->start + MYSQL_HEADER_LEN + 1;
+        auto src_ptr = sql;
+
+        if (new_sql_len == old_sql_len)
+        {
+            // New SQL is the same length as old.
+            memcpy(sql_start_ptr, src_ptr, new_sql_len);
+        }
+        else if (new_sql_len < old_sql_len)
+        {
+            // New SQL is shorter.
+            memcpy(sql_start_ptr, src_ptr, new_sql_len);
+            orig->rtrim(old_sql_len - new_sql_len);
+            header.pl_length = new_sql_len + 1;
+            mariadb::write_header(orig->start, header);
+        }
+        else
+        {
+            // New SQL is longer.
+            memcpy(sql_start_ptr, src_ptr, old_sql_len);
+            auto remaining_bytes = new_sql_len - old_sql_len;
+            auto* remains_ptr = reinterpret_cast<const uint8_t*>(src_ptr + old_sql_len);
+            orig->append(remains_ptr, remaining_bytes);
+            header.pl_length = new_sql_len + 1;
+            mariadb::write_header(orig->start, header);
+        }
+        rval = orig;
+    }
+    return rval;
 }
 }
