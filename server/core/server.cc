@@ -1026,11 +1026,6 @@ bool ServerEndpoint::routeQuery(GWBUF* buffer)
 
     if (modutil_is_SQL(buffer) || modutil_is_SQL_prepare(buffer))
     {
-        if (!gwbuf_is_contiguous(buffer))
-        {
-            buffer = gwbuf_make_contiguous(buffer);
-        }
-
         type_mask = qc_get_type_mask(buffer);
     }
 
