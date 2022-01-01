@@ -99,8 +99,6 @@ bool RWSplitSession::routeQuery(GWBUF* querybuf)
     }
 
     mxs::Buffer buffer(querybuf);
-    mxb_assert(buffer.is_contiguous());
-
     int rval = 0;
 
     if (m_state == TRX_REPLAY && !gwbuf_is_replayed(buffer.get()))
