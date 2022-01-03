@@ -81,8 +81,6 @@ public:
     uint8_t* start {nullptr};   /*< Start of the valid data */
     uint8_t* end {nullptr};     /*< First byte after the valid data */
 
-    std::shared_ptr<SHARED_BUF> sbuf;   /*< The shared buffer with the real data */
-
     HintVector hints;                               /*< Hint data for this buffer */
     uint32_t   gwbuf_type {GWBUF_TYPE_UNDEFINED};   /*< buffer's data type information */
     uint32_t   id {0};                              /*< Unique ID for this buffer, 0 if no ID
@@ -118,6 +116,7 @@ public:
     uint8_t*       data();
     size_t         length() const;
     bool           empty() const;
+    bool           is_parsed() const;
 
     /**
      * Append bytes to buffer, starting at the end pointer. May invalidate start and end pointers.
@@ -151,6 +150,8 @@ public:
     void rtrim(uint64_t bytes);
 
 private:
+    std::shared_ptr<SHARED_BUF> m_sbuf;   /*< The shared buffer with the real data */
+
     mutable std::string      m_sql;
     mutable std::string      m_canonical;
     mutable maxsimd::Markers m_markers;
@@ -178,9 +179,9 @@ inline bool gwbuf_should_track_state(const GWBUF* b)
     return b->gwbuf_type & GWBUF_TYPE_TRACK_STATE;
 }
 
-inline bool gwbuf_is_parsed(const GWBUF* b)
+inline bool GWBUF::is_parsed() const
 {
-    return b->get_classifier_data() != nullptr;
+    return get_classifier_data() != nullptr;
 }
 
 inline uint8_t* GWBUF::data()
