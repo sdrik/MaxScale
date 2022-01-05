@@ -92,6 +92,12 @@ public:
     const std::string& get_sql() const;
     const std::string& get_canonical() const;
 
+    /**
+     * Constructs an empty GWBUF. Does not allocate any storage.
+     */
+    GWBUF();
+
+
     explicit GWBUF(uint64_t size);
     explicit GWBUF(const GWBUF& rhs);
 

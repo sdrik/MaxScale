@@ -51,14 +51,6 @@ std::string extract_sql_real(const GWBUF* pBuf)
 
 #if defined (SS_DEBUG)
 
-inline void ensure_not_empty(const GWBUF* buf)
-{
-    if (buf)
-    {
-        mxb_assert(!buf->empty());
-    }
-}
-
 inline void ensure_owned(const GWBUF* buf)
 {
     // TODO: Currently not possible to know whether manually triggered
@@ -85,10 +77,6 @@ inline bool validate_buffer(const GWBUF* buf)
 }
 
 #else
-inline void ensure_not_empty(const GWBUF* buf)
-{
-}
-
 inline void ensure_owned(const GWBUF* head)
 {
 }
@@ -137,12 +125,17 @@ const std::string& GWBUF::get_canonical() const
     return m_canonical;
 }
 
-GWBUF::GWBUF(uint64_t size)
-    : m_sbuf(std::make_shared<SHARED_BUF>(size))
+GWBUF::GWBUF()
 {
 #ifdef SS_DEBUG
     owner = RoutingWorker::get_current_id();
 #endif
+}
+
+GWBUF::GWBUF(uint64_t size)
+    : GWBUF()
+{
+    m_sbuf = std::make_shared<SHARED_BUF>(size);
     start = m_sbuf->data.data();
     end = start + size;
 }
