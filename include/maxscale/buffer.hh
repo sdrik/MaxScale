@@ -61,6 +61,7 @@ public:
         : data(len)
     {
     }
+
     BufferObject         classifier_data;       /**< Parsing info */
     std::vector<uint8_t> data;                  /**< Actual memory that was allocated */
 };
@@ -93,15 +94,20 @@ public:
     const std::string& get_canonical() const;
 
     /**
-     * Constructs an empty GWBUF. Does not allocate any storage.
+     * Constructs an empty GWBUF. Does not allocate any storage. Calling most storage-accessing functions
+     * on an empty buffer is an error.
      */
     GWBUF();
 
-
     explicit GWBUF(uint64_t size);
-    explicit GWBUF(const GWBUF& rhs);
 
-    GWBUF(GWBUF&&) = delete;
+    GWBUF(GWBUF&& rhs) noexcept;
+    GWBUF& operator=(GWBUF&& rhs) noexcept;
+
+    // No copy-ctor, as it is not intuitively clear whether it should deep or shallow clone.
+
+    GWBUF clone_shallow() const;
+    GWBUF clone_deep() const;
 
     /**
      * Set classifier data. Can only be set once.
@@ -155,12 +161,15 @@ public:
      */
     void rtrim(uint64_t bytes);
 
+
 private:
     std::shared_ptr<SHARED_BUF> m_sbuf;   /*< The shared buffer with the real data */
 
     mutable std::string      m_sql;
     mutable std::string      m_canonical;
     mutable maxsimd::Markers m_markers;
+
+    void move_helper(GWBUF&& other) noexcept;
 };
 
 inline bool gwbuf_is_type_undefined(const GWBUF* b)
@@ -302,7 +311,7 @@ extern void gwbuf_free(GWBUF* buf);
  *
  * @return The cloned GWBUF, or NULL if any part of @buf could not be cloned.
  */
-extern GWBUF* gwbuf_clone(GWBUF* buf);
+GWBUF* gwbuf_clone(GWBUF* buf);
 
 /**
  * @brief Deep clone a GWBUF

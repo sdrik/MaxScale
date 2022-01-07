@@ -24,6 +24,7 @@
 #include <maxscale/modutil.hh>
 
 using mxs::RoutingWorker;
+using std::move;
 
 namespace
 {
@@ -140,17 +141,36 @@ GWBUF::GWBUF(uint64_t size)
     end = start + size;
 }
 
-GWBUF::GWBUF(const GWBUF& rhs)
-    : start(rhs.start)
-    , end(rhs.end)
-    , hints(rhs.hints)
-    , gwbuf_type(rhs.gwbuf_type)
-    , id(rhs.id)
-    , m_sbuf(rhs.m_sbuf)
+GWBUF::GWBUF(GWBUF&& rhs) noexcept
+    : GWBUF()
 {
-#ifdef SS_DEBUG
-    owner = RoutingWorker::get_current_id();
-#endif
+    move_helper(move(rhs));
+}
+
+GWBUF& GWBUF::operator=(GWBUF&& rhs) noexcept
+{
+    if (this != &rhs)
+    {
+        move_helper(move(rhs));
+    }
+    return *this;
+}
+
+void GWBUF::move_helper(GWBUF&& rhs) noexcept
+{
+    start = rhs.start;
+    rhs.start = nullptr;
+    end = rhs.end;
+    rhs.end = nullptr;
+    hints = move(rhs.hints);
+    gwbuf_type = rhs.gwbuf_type;
+    rhs.gwbuf_type = GWBUF_TYPE_UNDEFINED;
+    id = rhs.id;
+    rhs.id = 0;
+    m_sbuf = move(rhs.m_sbuf);
+    m_sql = move(rhs.m_sql);
+    m_canonical = move(rhs.m_canonical);
+    m_markers = move(rhs.m_markers);
 }
 
 /**
@@ -184,9 +204,42 @@ void gwbuf_free(GWBUF* buf)
     delete buf;
 }
 
+GWBUF GWBUF::clone_shallow() const
+{
+    GWBUF rval;
+    rval.start = start;
+    rval.end = end;
+    rval.hints = hints;
+    rval.gwbuf_type = gwbuf_type;
+
+    rval.id = id;
+    rval.m_sbuf = m_sbuf;
+    return rval;
+}
+
+GWBUF GWBUF::clone_deep() const
+{
+    auto len = length();
+    GWBUF rval(len);
+
+    rval.hints = hints;
+    rval.gwbuf_type = gwbuf_type;
+    rval.id = id;
+    memcpy(rval.start, start, len);
+    rval.m_sbuf->info = m_sbuf->info;
+    // TODO: clone BufferObject
+    rval.m_sql = m_sql;
+    rval.m_canonical = m_canonical;
+    rval.m_markers = m_markers;
+    return rval;
+}
+
 GWBUF* gwbuf_clone(GWBUF* buf)
 {
-    return new GWBUF(*buf);
+    auto* rval = new GWBUF();
+    auto clone = buf->clone_shallow();
+    *rval = move(clone);
+    return rval;
 }
 
 static GWBUF* gwbuf_deep_clone_portion(const GWBUF* buf, size_t length)
@@ -217,8 +270,9 @@ static GWBUF* gwbuf_deep_clone_portion(const GWBUF* buf, size_t length)
 
 GWBUF* gwbuf_deep_clone(const GWBUF* buf)
 {
-    validate_buffer(buf);
-    return gwbuf_deep_clone_portion(buf, gwbuf_length(buf));
+    auto rval = new GWBUF();
+    *rval = buf->clone_deep();
+    return rval;
 }
 
 GWBUF* gwbuf_split(GWBUF** buf, size_t length)
@@ -457,12 +511,13 @@ void GWBUF::append(const uint8_t* new_data, uint64_t n_bytes)
         // If called for a shared (shallow-cloned) buffer, make a new copy of the underlying data. The custom
         // data is not copied, as it does not have a copy-function.
         // TODO: think if custom data should be copied.
+        // Also ends up here if the shared ptr is null.
         auto new_sbuf = std::make_shared<SHARED_BUF>(new_len);
         auto* new_vec_begin = new_sbuf->data.data();
         memcpy(new_vec_begin, start, old_len);
         memcpy(new_vec_begin + old_len, new_data, n_bytes);
-        sbuf = move(new_sbuf);
-        start = sbuf->data.data();
+        m_sbuf = move(new_sbuf);
+        start = m_sbuf->data.data();
         end = start + new_len;
     }
 }
