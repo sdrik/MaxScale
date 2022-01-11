@@ -881,20 +881,24 @@ void MariaDBUserManager::check_show_dbs_priv(mxq::MariaDB& con, const UserDataba
                 {
                     string username = userhost.substr(0, pos);
                     string hostpattern = userhost.substr(pos + 1);
+                    MXB_ERROR("un: %s host: %s", username.c_str(), hostpattern.c_str());
                     if (type == SERVER::VersionInfo::Type::XPAND)
                     {
+                        MXB_ERROR("poistetaan quotet");
                         // The username and host pattern may be quoted on Xpand.
                         auto remove_quotes = [](string& str)
                         {
                             if (str.length() >= 2 && str[0] == '\'' && str.back() == '\'')
                             {
                                 str.pop_back();
-                                str.erase(0);
+                                str.erase(0, 1);
                             }
                         };
                         remove_quotes(username);
                         remove_quotes(hostpattern);
                     }
+                    MXB_ERROR("jälkeen un: %s host: %s", username.c_str(), hostpattern.c_str());
+
                     auto my_entry = userdata.find_entry_equal(username, hostpattern);
                     if (my_entry && my_entry->global_db_priv)
                     {
