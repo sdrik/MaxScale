@@ -217,15 +217,16 @@ GWBUF GWBUF::clone_shallow() const
     return rval;
 }
 
-GWBUF GWBUF::clone_deep() const
+GWBUF GWBUF::clone_deep(uint64_t n_bytes) const
 {
     auto len = length();
-    GWBUF rval(len);
+    mxb_assert(n_bytes <= len);
+    GWBUF rval(n_bytes);
 
     rval.hints = hints;
     rval.gwbuf_type = gwbuf_type;
     rval.id = id;
-    memcpy(rval.start, start, len);
+    memcpy(rval.start, start, n_bytes);
     rval.m_sbuf->info = m_sbuf->info;
     // TODO: clone BufferObject
     rval.m_sql = m_sql;
@@ -240,6 +241,15 @@ GWBUF* gwbuf_clone(GWBUF* buf)
     auto clone = buf->clone_shallow();
     *rval = move(clone);
     return rval;
+}
+
+void GWBUF::reserve(uint64_t size)
+{
+    // For now, only supported on empty buffers.
+    mxb_assert(!m_sbuf);
+    m_sbuf = std::make_unique<SHARED_BUF>(size);
+    start = m_sbuf->data.data();
+    end = start + size;
 }
 
 static GWBUF* gwbuf_deep_clone_portion(const GWBUF* buf, size_t length)
@@ -275,45 +285,57 @@ GWBUF* gwbuf_deep_clone(const GWBUF* buf)
     return rval;
 }
 
+GWBUF GWBUF::split(uint64_t n_bytes)
+{
+    auto len = length();
+    GWBUF rval;
+    // It's an error to split more than what is available.
+    mxb_assert(n_bytes <= len);
+    mxb_assert(!m_sbuf || m_sbuf.unique());
+
+    if (n_bytes == 0)
+    {
+        // Do nothing, return empty buffer.
+    }
+    else if (n_bytes <= len / 2)
+    {
+        // The amount of splitted data is less than half of the buffer. Copy the data and consume from the
+        // current object.
+        rval.reserve(n_bytes);
+        memcpy(rval.start, start, n_bytes);
+        consume(n_bytes);
+    }
+    else
+    {
+        // In this situation, it's better to return the contents of the current buffer with the extra trimmed
+        // out.
+        auto bytes_left = len - n_bytes;
+        rval = move(*this);
+        if (bytes_left > 0)
+        {
+            reserve(bytes_left);
+            memcpy(start, rval.start + n_bytes, bytes_left);
+            rval.rtrim(bytes_left);
+        }
+    }
+    return rval;
+}
+
 GWBUF* gwbuf_split(GWBUF** buf, size_t length)
 {
-    validate_buffer(*buf);
-    GWBUF* head = NULL;
+    GWBUF* head = nullptr;
 
     if (length > 0 && buf && *buf)
     {
-        GWBUF* buffer = *buf;
-        GWBUF* orig_tail = nullptr;
-        head = buffer;
-        ensure_owned(buffer);
-
-        /** Handle complete buffers */
-        while (buffer && length && length >= gwbuf_link_length(buffer))
+        GWBUF* orig = *buf;
+        auto splitted = orig->split(length);
+        head = new GWBUF;
+        *head = move(splitted);
+        if (orig->empty())
         {
-            length -= gwbuf_link_length(buffer);
-            buffer = nullptr;
+            delete orig;
+            *buf = nullptr;
         }
-
-        /** Some data is left in the original buffer */
-        if (buffer)
-        {
-            if (length > 0)
-            {
-                mxb_assert(gwbuf_link_length(buffer) > length);
-                GWBUF* partial = gwbuf_deep_clone_portion(buffer, length);
-
-                /** If the head points to the original head of the buffer chain
-                 * and we are splitting a contiguous buffer, we only need to return
-                 * the partial clone of the first buffer. If we are splitting multiple
-                 * buffers, we need to append them to the full buffers. */
-                head = head == buffer ? partial : gwbuf_append(head, partial);
-
-                buffer = gwbuf_consume(buffer, length);
-            }
-        }
-
-        *buf = buffer;
-
     }
 
     return head;

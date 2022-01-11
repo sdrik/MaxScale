@@ -107,7 +107,11 @@ public:
     // No copy-ctor, as it is not intuitively clear whether it should deep or shallow clone.
 
     GWBUF clone_shallow() const;
-    GWBUF clone_deep() const;
+    GWBUF clone_deep(uint64_t n_bytes) const;
+
+    GWBUF split(uint64_t n_bytes);
+
+    void reserve(uint64_t size);
 
     /**
      * Set classifier data. Can only be set once.
