@@ -294,12 +294,19 @@ int DCB::read(GWBUF** head, int maxbytes)
     int nsingleread = 0;
     int nreadtotal = 0;
 
-    if (m_readq)
+    auto* target = *head;
+    if (m_readq && !m_readq->empty())
     {
-        *head = gwbuf_append(*head, m_readq);
+        target = gwbuf_append(target, m_readq);
         m_readq = NULL;
-        nreadtotal = gwbuf_length(*head);
+        nreadtotal = gwbuf_length(target);
     }
+
+    if (!target)
+    {
+        target = new GWBUF;
+    }
+    *head = target;
 
     if (m_encryption.state == SSLState::ESTABLISHED)
     {
@@ -329,21 +336,16 @@ int DCB::read(GWBUF** head, int maxbytes)
 
     while (0 == maxbytes || nreadtotal < maxbytes)
     {
-        int bytes_available;
-
-        bytes_available = socket_bytes_readable();
+        int bytes_available = socket_bytes_readable();
         if (bytes_available <= 0)
         {
-            return bytes_available < 0 ? -1
-                                       :/** Handle closed client socket */
+            return bytes_available < 0 ? -1 :/** Handle closed client socket */
                    dcb_read_no_bytes_available(this, m_fd, nreadtotal);
         }
         else
         {
-            GWBUF* buffer;
-
-            buffer = basic_read(bytes_available, maxbytes, nreadtotal, &nsingleread);
-            if (buffer)
+            auto read_success = basic_read(target, bytes_available, maxbytes, nreadtotal, &nsingleread);
+            if (read_success)
             {
                 m_last_read = mxs_clock();
                 nreadtotal += nsingleread;
@@ -352,9 +354,6 @@ int DCB::read(GWBUF** head, int maxbytes)
                           this,
                           mxs::to_string(m_state),
                           m_fd);
-
-                /*< Append read data to the gwbuf */
-                *head = gwbuf_append(*head, buffer);
             }
             else
             {
@@ -428,36 +427,38 @@ static int dcb_read_no_bytes_available(DCB* dcb, int fd, int nreadtotal)
  * @param nsingleread       To be set as the number of bytes read this time
  * @return                  GWBUF* buffer containing new data, or null.
  */
-GWBUF* DCB::basic_read(int bytesavailable, int maxbytes, int nreadtotal, int* nsingleread)
+bool DCB::basic_read(GWBUF* target, int bytesavailable, int maxbytes, int nreadtotal, int* nsingleread)
 {
-    GWBUF* buffer;
-    int bufsize = maxbytes == 0 ? bytesavailable : MXS_MIN(bytesavailable, maxbytes - nreadtotal);
+    bool rval = false;
+    int bytes_expected = maxbytes == 0 ? bytesavailable : MXS_MIN(bytesavailable, maxbytes - nreadtotal);
+    auto write_ptr = target->prepare_for_write(bytes_expected);
 
-    if ((buffer = gwbuf_alloc(bufsize)) == NULL)
+    auto ret = ::read(m_fd, write_ptr, bytes_expected);
+    m_stats.n_reads++;
+    *nsingleread = ret;
+
+    if (ret <= 0)
     {
-        *nsingleread = -1;
+        if (errno != 0 && errno != EAGAIN && errno != EWOULDBLOCK)
+        {
+            MXS_ERROR("Read failed, dcb %p in state %s fd %d: %d, %s",
+                      this,
+                      mxs::to_string(m_state),
+                      m_fd,
+                      errno,
+                      mxs_strerror(errno));
+        }
     }
     else
     {
-        *nsingleread = ::read(m_fd, GWBUF_DATA(buffer), bufsize);
-        m_stats.n_reads++;
-
-        if (*nsingleread <= 0)
+        rval = true;
+        if (ret < bytes_expected)
         {
-            if (errno != 0 && errno != EAGAIN && errno != EWOULDBLOCK)
-            {
-                MXS_ERROR("Read failed, dcb %p in state %s fd %d: %d, %s",
-                          this,
-                          mxs::to_string(m_state),
-                          m_fd,
-                          errno,
-                          mxs_strerror(errno));
-            }
-            gwbuf_free(buffer);
-            buffer = NULL;
+            MXB_INFO("Expected %i bytes, got %li.", bytes_expected, ret);
+            target->rtrim(bytes_expected - ret);
         }
     }
-    return buffer;
+    return rval;
 }
 
 /**

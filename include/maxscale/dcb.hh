@@ -680,7 +680,7 @@ private:
 
     bool m_open {true};     /**< Is dcb still open, i.e. close() not called? */
 
-    GWBUF* basic_read(int bytesavailable, int maxbytes, int nreadtotal, int* nsingleread);
+    bool basic_read(GWBUF* target, int bytesavailable, int maxbytes, int nreadtotal, int* nsingleread);
 
     int    read_SSL(GWBUF** head);
     GWBUF* basic_read_SSL(int* nsingleread);

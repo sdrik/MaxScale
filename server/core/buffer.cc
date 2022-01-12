@@ -217,17 +217,15 @@ GWBUF GWBUF::clone_shallow() const
     return rval;
 }
 
-GWBUF GWBUF::clone_deep(uint64_t n_bytes) const
+GWBUF GWBUF::clone_deep() const
 {
     auto len = length();
-    mxb_assert(n_bytes <= len);
-    GWBUF rval(n_bytes);
+    GWBUF rval(len);
 
     rval.hints = hints;
     rval.gwbuf_type = gwbuf_type;
     rval.id = id;
-    memcpy(rval.start, start, n_bytes);
-    rval.m_sbuf->info = m_sbuf->info;
+    memcpy(rval.start, start, len);
     // TODO: clone BufferObject
     rval.m_sql = m_sql;
     rval.m_canonical = m_canonical;
@@ -250,6 +248,40 @@ void GWBUF::reserve(uint64_t size)
     m_sbuf = std::make_unique<SHARED_BUF>(size);
     start = m_sbuf->data.data();
     end = start + size;
+}
+
+uint8_t* GWBUF::prepare_for_write(uint64_t write_size)
+{
+    uint8_t* rval = nullptr;
+    if (m_sbuf)
+    {
+        auto& bufdata = m_sbuf->data;
+        auto write_bytes_available = bufdata.size() - (end - bufdata.data());
+        if (write_bytes_available >= write_size)
+        {
+            // Underlying buffer is already big enough. Just move the end pointer.
+            rval = end;
+            end += write_size;
+        }
+        else
+        {
+            mxb_assert(m_sbuf.unique());
+            // May reallocate.
+            auto old_len = length();
+            auto bytes_consumed = start - bufdata.data();
+            auto new_len = old_len + write_size;
+            bufdata.resize(bytes_consumed + new_len);
+            start = bufdata.data() + bytes_consumed;
+            rval = start + old_len;
+            end = start + new_len;
+        }
+    }
+    else
+    {
+        reserve(write_size);
+        rval = start;
+    }
+    return rval;
 }
 
 static GWBUF* gwbuf_deep_clone_portion(const GWBUF* buf, size_t length)

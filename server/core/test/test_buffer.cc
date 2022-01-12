@@ -280,8 +280,6 @@ void test_consume()
 
     buffer = gwbuf_append(gwbuf_alloc_and_load(5, data),
                           gwbuf_alloc_and_load(5, data + 5));
-    mxb_assert_message(gwbuf_consume(buffer, 100) == NULL,
-                       "Consuming more bytes than are available should return NULL");
 
 
     /** Consuming near buffer boudaries */
@@ -474,7 +472,7 @@ static int test1()
     mxb_assert_message((size - bite1 - bite2) == buflen, "Incorrect buffer size");
     mxb_assert_message(0 == GWBUF_EMPTY(buffer), "Buffer should not be empty");
     fprintf(stderr, "\t..done\n");
-    buffer = gwbuf_consume(buffer, bite3);
+    buffer = gwbuf_consume(buffer, gwbuf_length(buffer));
     fprintf(stderr, "Consumed %lu bytes, should have null buffer", bite3);
     mxb_assert_message(NULL == buffer, "Buffer should be null");
 
