@@ -1085,9 +1085,7 @@ bool RWSplitSession::handle_got_target(mxs::Buffer&& buffer, RWBackend* target, 
                    || extract_binary_ps_id(buffer.get()) == MARIADB_PS_DIRECT_EXEC_ID);
 
         // Attempt a causal read only when the query is routed to a slave
-        attempting_causal_read = target->is_slave()
-            && ((m_config.causal_reads == CausalReads::LOCAL && !m_gtid_pos.empty())
-                || m_config.causal_reads == CausalReads::GLOBAL);
+        attempting_causal_read = target->is_slave() && should_do_causal_read();
 
         if (cmd == MXS_COM_QUERY && attempting_causal_read)
         {
@@ -1098,6 +1096,17 @@ bool RWSplitSession::handle_got_target(mxs::Buffer&& buffer, RWBackend* target, 
         else if (m_config.causal_reads != CausalReads::NONE && target->is_master())
         {
             gwbuf_set_type(buffer.get(), GWBUF_TYPE_TRACK_STATE);
+        }
+
+        if (m_wait_gtid == GTID_READ_DONE)
+        {
+            // GTID sync done but causal read wasn't started because the conditions weren't met. Go back to
+            // the default state since this now a normal read.
+            m_wait_gtid = NONE;
+        }
+        else if (m_wait_gtid == READING_GTID)
+        {
+            store = false;  // This is the GTID sync query, don't store it
         }
 
         if (target->is_slave() && (cmd == MXS_COM_QUERY || cmd == MXS_COM_STMT_EXECUTE))
