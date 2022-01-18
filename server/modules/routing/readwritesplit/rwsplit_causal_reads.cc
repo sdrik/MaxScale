@@ -287,7 +287,7 @@ std::pair<mxs::Buffer, RWSplitSession::RoutingPlan> RWSplitSession::start_gtid_p
 
     m_qc.revert_update();
     m_qc.update_route_info(get_current_target(), buffer.get());
-    RoutingPlan plan = resolve_route(buffer, route_info());
+    RoutingPlan plan {TARGET_MASTER, get_master_backend()};
 
     return {buffer, plan};
 }
