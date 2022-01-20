@@ -282,6 +282,7 @@ private:
 
     void add_userdata_subscriber(MXS_SESSION::EventSubscriber* obj) override;
     void remove_userdata_subscriber(MXS_SESSION::EventSubscriber* obj) override;
+    bool pool_backends_cb(mxb::Worker::Call::action_t action);
 
     // Delivers a provided response to the upstream filter that should receive it
     void deliver_response();

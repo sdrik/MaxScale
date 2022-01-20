@@ -391,81 +391,15 @@ void Session::set_can_pool_backends(bool value)
             // an idle session.
             if (m_idle_pool_call_id == mxb::Worker::NO_CALL)
             {
-                std::function<bool(Worker::Call::action_t)> pool_backends =
-                    [this, &pool_backends](Worker::Call::action_t action) {
-                    bool call_again = true;
-                    if (action == Worker::Call::action_t::EXECUTE)
-                    {
-                        // Session has been idle for long enough, check that the connections have not had
-                        // any activity.
-                        auto* client = client_dcb;
-                        if (client->state() == DCB::State::POLLING)
-                        {
-                            // TODO: should use 'epoll_tick_now' from Worker, but dcb uses 'mxs_clock'.
-                            // This hurts accuracy.
-                            auto now = mxs_clock();
-                            auto client_idle_tics = now - std::max(client->last_read(),
-                                                                        client->last_write());
-                            auto client_idle_ms = client_idle_tics * 100;
-                            if (client_idle_ms > m_pooling_time_ms)
-                            {
-                                // Client connection is idle, try to pool backends.
-                                auto& backends = backend_connections();
-                                size_t n_pooled = 0;
-                                for (auto& backend : backends)
-                                {
-                                    if (backend->established() && backend->is_idle())
-                                    {
-                                        auto pEp = static_cast<ServerEndpoint*>(backend->upstream());
-                                        if (pEp->can_try_pooling())
-                                        {
-                                            if (pEp->try_to_pool())
-                                            {
-                                                n_pooled++;
-                                            }
-                                        }
-                                    }
-                                }
-
-                                if (n_pooled == backends.size())
-                                {
-                                    // TODO: Think if there is some corner case where a connection is
-                                    // reattached to a session but clientReply is not called.
-                                    call_again = false;
-                                }
-                            }
-                        }
-
-                        if (!call_again)
-                        {
-                            // When a session manually removes a delayed call, it clears the call id. When
-                            // the call does it itself, it must also clear the id itself.
-                            m_idle_pool_call_id = mxb::Worker::NO_CALL;
-                        }
-                        else if (m_pooling_time_ms < 1000)
-                        {
-                            // Returning true means the delayed call will run again after 'm_pooling_time_ms'.
-                            // This is ok if the time is several seconds, as some connections may not yet have
-                            // been in a poolable state. This is not so ok if the time is very short. Enforce
-                            // a minimum delay.
-
-                            // TODO: Nicer if delayed call could modify it's own timing.
-                            call_again = false;
-                            auto func_copy = pool_backends;
-                            m_idle_pool_call_id = m_worker->delayed_call(1000, move(func_copy));
-                        }
-                    }
-                    return call_again;
-                };
-
-                m_idle_pool_call_id = m_worker->delayed_call(m_pooling_time_ms, std::move(pool_backends));
+                m_idle_pool_call_id = m_worker->delayed_call(m_pooling_time_ms, &Session::pool_backends_cb,
+                                                             this);
+                MXB_ERROR("conn poole check scheduled %li", m_pooling_time_ms);
             }
         }
     }
     else if (m_idle_pool_call_id != mxb::Worker::NO_CALL)
     {
         m_worker->cancel_delayed_call(m_idle_pool_call_id);
-        m_idle_pool_call_id = mxb::Worker::NO_CALL;
     }
 
     m_can_pool_backends = value;
@@ -1690,7 +1624,6 @@ bool Session::move_to(RoutingWorker* pTo)
     if (m_idle_pool_call_id != mxb::Worker::NO_CALL)
     {
         m_worker->cancel_delayed_call(m_idle_pool_call_id);
-        m_idle_pool_call_id = mxb::Worker::NO_CALL;
     }
 
     for (mxs::BackendConnection* backend_conn : m_backends_conns)
@@ -1818,6 +1751,80 @@ void Session::endpoint_waiting_for_conn()
 void Session::endpoint_no_longer_waiting_for_conn()
 {
     m_endpoints_waiting--;
+}
+
+bool Session::pool_backends_cb(mxb::Worker::Call::action_t action)
+{
+    // This should be called by the delayed call mechanism.
+    bool call_again = true;
+    if (action == Worker::Call::action_t::EXECUTE)
+    {
+        // Session has been idle for long enough, check that the connections have not had
+        // any activity.
+        auto* client = client_dcb;
+        MXB_ERROR("pool_backends_cb1");
+        if (client->state() == DCB::State::POLLING)
+        {
+            // TODO: should use 'epoll_tick_now' from Worker, but dcb uses 'mxs_clock'.
+            // This hurts accuracy.
+            auto now = mxs_clock();
+            auto client_idle_tics = now - std::max(client->last_read(),
+                                                   client->last_write());
+            auto client_idle_ms = client_idle_tics * 100;
+            MXB_ERROR("pool_backends_cb2a: dcb idle: %li pooling time: %li", client_idle_ms, m_pooling_time_ms);
+            if (client_idle_ms >= m_pooling_time_ms)
+            {
+                MXB_ERROR("pool_backends_cb2b");
+                // Client connection is idle, try to pool backends.
+                auto& backends = backend_connections();
+                size_t n_pooled = 0;
+                for (auto& backend : backends)
+                {
+                    if (backend->established() && backend->is_idle())
+                    {
+                        auto pEp = static_cast<ServerEndpoint*>(backend->upstream());
+                        if (pEp->can_try_pooling())
+                        {
+                            if (pEp->try_to_pool())
+                            {
+                                n_pooled++;
+                                MXB_ERROR("conn pooled");
+                            }
+                        }
+                    }
+                }
+
+                if (n_pooled == backends.size())
+                {
+                    // TODO: Think if there is some corner case where a connection is
+                    // reattached to a session but clientReply is not called.
+                    call_again = false;
+                }
+            }
+        }
+
+        if (!call_again)
+        {
+            // Need to remove this manually as cancel-mode is not called.
+            m_idle_pool_call_id = mxb::Worker::NO_CALL;
+        }
+        else if (m_pooling_time_ms < 1000)
+        {
+            // Returning true means the delayed call will run again after 'm_pooling_time_ms'.
+            // This is ok if the time is several seconds, as some connections may not yet have
+            // been in a poolable state. This is not so ok if the time is very short. Enforce
+            // a minimum delay.
+
+            // TODO: Nicer if delayed call could modify it's own timing.
+            call_again = false;
+            m_idle_pool_call_id = m_worker->delayed_call(1000, &Session::pool_backends_cb, this);
+        }
+    }
+    else
+    {
+        m_idle_pool_call_id = mxb::Worker::NO_CALL;
+    }
+    return call_again;
 }
 
 MXS_SESSION::EventSubscriber::EventSubscriber(MXS_SESSION* session)
