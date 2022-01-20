@@ -257,6 +257,9 @@ public:
     using Load = WorkerLoad;
     using Timer = WorkerTimer;
     using RandomEngine = XorShiftRandom;
+    using CallIdT = int64_t;
+
+    static constexpr CallIdT NO_CALL = -1;
 
     /**
      * A delegating timer that delegates the timer tick handling
@@ -538,7 +541,7 @@ public:
      */
     bool execute(const std::function<void ()>& func, mxb::Semaphore* pSem, enum execute_mode_t mode);
 
-    bool execute(std::function<void ()> func, enum execute_mode_t mode)
+    bool execute(const std::function<void ()>& func, enum execute_mode_t mode)
     {
         return execute(func, NULL, mode);
     }
@@ -608,13 +611,13 @@ public:
      *            case the return value is ignored and the function will not
      *            be called again.
      */
-    uint32_t delayed_call(int32_t delay, bool (* pFunction)(Worker::Call::action_t action))
+    CallIdT delayed_call(int32_t delay, bool (* pFunction)(Worker::Call::action_t action))
     {
         return add_delayed_call(new DelayedCallFunctionVoid(delay, next_delayed_call_id(), pFunction));
     }
 
-    uint32_t delayed_call(const std::chrono::milliseconds& delay,
-                          bool (* pFunction)(Worker::Call::action_t action))
+    CallIdT delayed_call(const std::chrono::milliseconds& delay,
+                         bool (* pFunction)(Worker::Call::action_t action))
     {
         int32_t ms = delay.count();
         return delayed_call(ms, pFunction);
@@ -641,17 +644,17 @@ public:
      *            be called again.
      */
     template<class D>
-    uint32_t delayed_call(int32_t delay,
-                          bool (* pFunction)(Worker::Call::action_t action, D data),
-                          D data)
+    CallIdT delayed_call(int32_t delay,
+                         bool (* pFunction)(Worker::Call::action_t action, D data),
+                         D data)
     {
         return add_delayed_call(new DelayedCallFunction<D>(delay, next_delayed_call_id(), pFunction, data));
     }
 
     template<class D>
-    uint32_t delayed_call(const std::chrono::milliseconds& delay,
-                          bool (* pFunction)(Worker::Call::action_t action, D data),
-                          D data)
+    CallIdT delayed_call(const std::chrono::milliseconds& delay,
+                         bool (* pFunction)(Worker::Call::action_t action, D data),
+                         D data)
     {
         int32_t ms = delay.count();
         return delayed_call(ms, pFunction, data);
@@ -677,17 +680,17 @@ public:
      *            be called again.
      */
     template<class T>
-    uint32_t delayed_call(int32_t delay,
-                          bool (T::* pMethod)(Worker::Call::action_t action),
-                          T* pT)
+    CallIdT delayed_call(int32_t delay,
+                         bool (T::* pMethod)(Worker::Call::action_t action),
+                         T* pT)
     {
         return add_delayed_call(new DelayedCallMethodVoid<T>(delay, next_delayed_call_id(), pMethod, pT));
     }
 
     template<class T>
-    uint32_t delayed_call(const std::chrono::milliseconds& delay,
-                          bool (T::* pMethod)(Worker::Call::action_t action),
-                          T* pT)
+    CallIdT delayed_call(const std::chrono::milliseconds& delay,
+                         bool (T::* pMethod)(Worker::Call::action_t action),
+                         T* pT)
     {
         int32_t ms = delay.count();
         return delayed_call(ms, pMethod, pT);
@@ -714,10 +717,10 @@ public:
      *            be called again.
      */
     template<class T, class D>
-    uint32_t delayed_call(int32_t delay,
-                          bool (T::* pMethod)(Worker::Call::action_t action, D data),
-                          T* pT,
-                          D data)
+    CallIdT delayed_call(int32_t delay,
+                         bool (T::* pMethod)(Worker::Call::action_t action, D data),
+                         T* pT,
+                         D data)
     {
         return add_delayed_call(new DelayedCallMethod<T, D>(delay,
                                                             next_delayed_call_id(),
@@ -727,10 +730,10 @@ public:
     }
 
     template<class T, class D>
-    uint32_t delayed_call(const std::chrono::milliseconds& delay,
-                          bool (T::* pMethod)(Worker::Call::action_t action, D data),
-                          T* pT,
-                          D data)
+    CallIdT delayed_call(const std::chrono::milliseconds& delay,
+                         bool (T::* pMethod)(Worker::Call::action_t action, D data),
+                         T* pT,
+                         D data)
     {
         int32_t ms = delay.count();
         return delayed_call(ms, pMethod, pT, data);
@@ -755,14 +758,14 @@ public:
      *            case the return value is ignored and the function will not
      *            be called again.
      */
-    uint32_t delayed_call(int32_t delay,
-                          std::function<bool(Worker::Call::action_t action)>&& f)
+    CallIdT delayed_call(int32_t delay,
+                         std::function<bool(Worker::Call::action_t action)>&& f)
     {
         return add_delayed_call(new DelayedCallFunctor(delay, next_delayed_call_id(), std::move(f)));
     }
 
-    uint32_t delayed_call(const std::chrono::milliseconds& delay,
-                          std::function<bool(Worker::Call::action_t action)>&& f)
+    CallIdT delayed_call(const std::chrono::milliseconds& delay,
+                         std::function<bool(Worker::Call::action_t action)>&& f)
     {
         return add_delayed_call(new DelayedCallFunctor(delay.count(), next_delayed_call_id(), std::move(f)));
     }
@@ -778,7 +781,7 @@ public:
      *
      * @return True, if the id represented an existing delayed call.
      */
-    bool cancel_delayed_call(uint32_t id);
+    bool cancel_delayed_call(CallIdT id);
 
 protected:
     const int m_epoll_fd;               /*< The epoll file descriptor. */
@@ -845,12 +848,10 @@ private:
     class DelayedCall;
     friend class DelayedCall;
 
-    uint32_t next_delayed_call_id()
+    CallIdT next_delayed_call_id()
     {
-        // Called in single-thread context. Wrapping does not matter
-        // as it is unlikely there would be 4 billion pending delayed
-        // calls.
-        return ++m_next_delayed_call_id;
+        // Called in single-thread context.
+        return m_next_delayed_call_id++;
     }
 
     class DelayedCall
@@ -868,7 +869,7 @@ private:
             return m_delay;
         }
 
-        uint32_t id() const
+        CallIdT id() const
         {
             return m_id;
         }
@@ -900,7 +901,7 @@ private:
         }
 
     protected:
-        DelayedCall(int32_t delay, int32_t id)
+        DelayedCall(int32_t delay, CallIdT id)
             : m_id(id)
             , m_delay(delay >= 0 ? delay : 0)
             , m_at(get_at(delay, mxb::Clock::now()))
@@ -921,9 +922,9 @@ private:
         }
 
     private:
-        uint32_t m_id;      // The id of the delayed call.
-        int32_t  m_delay;   // The delay in milliseconds.
-        int64_t  m_at;      // The next time the function should be invoked.
+        CallIdT m_id;       // The id of the delayed call.
+        int32_t m_delay;    // The delay in milliseconds.
+        int64_t m_at;       // The next time the function should be invoked.
     };
 
     template<class D>
@@ -934,7 +935,7 @@ private:
 
     public:
         DelayedCallFunction(int32_t delay,
-                            int32_t id,
+                            CallIdT id,
                             bool (*pFunction)(Worker::Call::action_t action, D data),
                             D data)
             : DelayedCall(delay, id)
@@ -962,7 +963,7 @@ private:
 
     public:
         DelayedCallFunctionVoid(int32_t delay,
-                                int32_t id,
+                                CallIdT id,
                                 bool (*pFunction)(Worker::Call::action_t action))
             : DelayedCall(delay, id)
             , m_pFunction(pFunction)
@@ -987,7 +988,7 @@ private:
 
     public:
         DelayedCallMethod(int32_t delay,
-                          int32_t id,
+                          CallIdT id,
                           bool (T::* pMethod)(Worker::Call::action_t action, D data),
                           T* pT,
                           D data)
@@ -1018,7 +1019,7 @@ private:
 
     public:
         DelayedCallMethodVoid(int32_t delay,
-                              int32_t id,
+                              CallIdT id,
                               bool (T::* pMethod)(Worker::Call::action_t),
                               T* pT)
             : DelayedCall(delay, id)
@@ -1045,7 +1046,7 @@ private:
 
     public:
         DelayedCallFunctor(int32_t delay,
-                           int32_t id,
+                           CallIdT id,
                            std::function<bool(Worker::Call::action_t)>&& f)
             : DelayedCall(delay, id)
             , m_f(std::move(f))
@@ -1062,8 +1063,8 @@ private:
         std::function<bool(Worker::Call::action_t)> m_f;
     };
 
-    uint32_t add_delayed_call(DelayedCall* pDelayed_call);
-    void     adjust_timer();
+    CallIdT add_delayed_call(DelayedCall* pDelayed_call);
+    void    adjust_timer();
 
     void handle_message(MessageQueue& queue, const MessageQueue::Message& msg) override;
 
@@ -1084,9 +1085,9 @@ private:
 
     void run(mxb::Semaphore* pSem);
 
-    typedef DelegatingTimer<Worker>                    PrivateTimer;
-    typedef std::multimap<int64_t, DelayedCall*>       DelayedCallsByTime;
-    typedef std::unordered_map<uint32_t, DelayedCall*> DelayedCallsById;
+    typedef DelegatingTimer<Worker>                   PrivateTimer;
+    typedef std::multimap<int64_t, DelayedCall*>      DelayedCallsByTime;
+    typedef std::unordered_map<CallIdT, DelayedCall*> DelayedCallsById;
 
     uint32_t           m_max_events;            /*< Maximum numer of events in each epoll_wait call. */
     STATISTICS         m_statistics;            /*< Worker statistics. */
@@ -1104,6 +1105,6 @@ private:
     RandomEngine       m_random_engine;         /*< Random engine for this worker (this thread). */
     TimePoint          m_epoll_tick_now;        /*< TimePoint when epoll_tick() was called */
 
-    int32_t m_next_delayed_call_id;     /*< The next delayed call id. */
+    CallIdT m_next_delayed_call_id {1};     /*< The next delayed call id. */
 };
 }
