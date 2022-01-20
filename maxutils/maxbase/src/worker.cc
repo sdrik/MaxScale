@@ -282,7 +282,6 @@ Worker::Worker(int max_events)
     , m_nCurrent_descriptors(0)
     , m_nTotal_descriptors(0)
     , m_pTimer(new PrivateTimer(this, this, &Worker::tick))
-    , m_next_delayed_call_id{1}
 {
     mxb_assert(max_events > 0);
 
@@ -915,7 +914,7 @@ void Worker::tick()
     adjust_timer();
 }
 
-uint32_t Worker::add_delayed_call(DelayedCall* pCall)
+Worker::CallIdT Worker::add_delayed_call(DelayedCall* pCall)
 {
     mxb_assert(Worker::get_current() == this);
     bool adjust = true;
@@ -970,7 +969,7 @@ void Worker::adjust_timer()
     }
 }
 
-bool Worker::cancel_delayed_call(uint32_t id)
+bool Worker::cancel_delayed_call(CallIdT id)
 {
     mxb_assert(Worker::get_current() == this || m_state == FINISHED);
     bool found = false;
@@ -1007,7 +1006,7 @@ bool Worker::cancel_delayed_call(uint32_t id)
     else
     {
         mxb_assert_message(!true,
-                           "Attempt to remove delayed call using non-existent id %u. "
+                           "Attempt to remove delayed call using non-existent id %ld. "
                            "Calling hktask_remove() from the task function? Simply "
                            "return false instead.", id);
         MXB_WARNING("Attempt to remove a delayed call, associated with non-existing id.");

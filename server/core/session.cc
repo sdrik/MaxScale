@@ -376,6 +376,101 @@ json_t* Session::as_json_resource(const char* host, bool rdns) const
     return data;
 }
 
+bool Session::can_pool_backends() const
+{
+    return m_can_pool_backends;
+}
+
+void Session::set_can_pool_backends(bool value)
+{
+    if (value)
+    {
+        if (m_pooling_time_ms > 0)
+        {
+            // If pooling check was already scheduled, do nothing. This likely only happens when killing
+            // an idle session.
+            if (m_idle_pool_call_id == mxb::Worker::NO_CALL)
+            {
+                std::function<bool(Worker::Call::action_t)> pool_backends =
+                    [this, &pool_backends](Worker::Call::action_t action) {
+                    bool call_again = true;
+                    if (action == Worker::Call::action_t::EXECUTE)
+                    {
+                        // Session has been idle for long enough, check that the connections have not had
+                        // any activity.
+                        auto* client = client_dcb;
+                        if (client->state() == DCB::State::POLLING)
+                        {
+                            // TODO: should use 'epoll_tick_now' from Worker, but dcb uses 'mxs_clock'.
+                            // This hurts accuracy.
+                            auto now = mxs_clock();
+                            auto client_idle_tics = now - std::max(client->last_read(),
+                                                                        client->last_write());
+                            auto client_idle_ms = client_idle_tics * 100;
+                            if (client_idle_ms > m_pooling_time_ms)
+                            {
+                                // Client connection is idle, try to pool backends.
+                                auto& backends = backend_connections();
+                                size_t n_pooled = 0;
+                                for (auto& backend : backends)
+                                {
+                                    if (backend->established() && backend->is_idle())
+                                    {
+                                        auto pEp = static_cast<ServerEndpoint*>(backend->upstream());
+                                        if (pEp->can_try_pooling())
+                                        {
+                                            if (pEp->try_to_pool())
+                                            {
+                                                n_pooled++;
+                                            }
+                                        }
+                                    }
+                                }
+
+                                if (n_pooled == backends.size())
+                                {
+                                    // TODO: Think if there is some corner case where a connection is
+                                    // reattached to a session but clientReply is not called.
+                                    call_again = false;
+                                }
+                            }
+                        }
+
+                        if (!call_again)
+                        {
+                            // When a session manually removes a delayed call, it clears the call id. When
+                            // the call does it itself, it must also clear the id itself.
+                            m_idle_pool_call_id = mxb::Worker::NO_CALL;
+                        }
+                        else if (m_pooling_time_ms < 1000)
+                        {
+                            // Returning true means the delayed call will run again after 'm_pooling_time_ms'.
+                            // This is ok if the time is several seconds, as some connections may not yet have
+                            // been in a poolable state. This is not so ok if the time is very short. Enforce
+                            // a minimum delay.
+
+                            // TODO: Nicer if delayed call could modify it's own timing.
+                            call_again = false;
+                            auto func_copy = pool_backends;
+                            m_idle_pool_call_id = m_worker->delayed_call(1000, move(func_copy));
+                        }
+                    }
+                    return call_again;
+                };
+
+                m_idle_pool_call_id = m_worker->delayed_call(m_pooling_time_ms, std::move(pool_backends));
+            }
+        }
+    }
+    else if (m_idle_pool_call_id != mxb::Worker::NO_CALL)
+    {
+        m_worker->cancel_delayed_call(m_idle_pool_call_id);
+        m_idle_pool_call_id = mxb::Worker::NO_CALL;
+    }
+
+    m_can_pool_backends = value;
+}
+
 json_t* session_to_json(const MXS_SESSION* session, const char* host, bool rdns)
 {
     stringstream ss;
@@ -648,13 +743,24 @@ Session::Session(std::shared_ptr<const ListenerData> listener_data,
     , m_tail(&m_routable)
     , m_listener_data(std::move(listener_data))
 {
-    if (service->config()->retain_last_statements != -1)        // Explicitly set for the service
+    const auto& svc_config = *service->config();
+    if (svc_config.retain_last_statements != -1)        // Explicitly set for the service
     {
-        m_retain_last_statements = service->config()->retain_last_statements;
+        m_retain_last_statements = svc_config.retain_last_statements;
     }
     else
     {
         m_retain_last_statements = this_unit.retain_last_statements;
+    }
+    // Pooling time is pinned at session creation. Service config changes will not affect it.
+    auto pooling_time = svc_config.idle_session_pooling_time.count();
+    if (pooling_time == 0)
+    {
+        m_pooling_time_ms = 10; // Quickly check for idle sessions.
+    }
+    else
+    {
+        m_pooling_time_ms = 1000 * pooling_time;
     }
 }
 
@@ -669,6 +775,10 @@ Session::~Session()
         client_dcb = NULL;
     }
 
+    if (m_idle_pool_call_id != mxb::Worker::NO_CALL)
+    {
+        m_worker->cancel_delayed_call(m_idle_pool_call_id);
+    }
     if (this_unit.dump_statements == SESSION_DUMP_STATEMENTS_ON_CLOSE)
     {
         dump_statements();
@@ -1577,6 +1687,12 @@ bool Session::move_to(RoutingWorker* pTo)
     pDcb->set_owner(nullptr);
     pDcb->set_manager(nullptr);
 
+    if (m_idle_pool_call_id != mxb::Worker::NO_CALL)
+    {
+        m_worker->cancel_delayed_call(m_idle_pool_call_id);
+        m_idle_pool_call_id = mxb::Worker::NO_CALL;
+    }
+
     for (mxs::BackendConnection* backend_conn : m_backends_conns)
     {
         pDcb = backend_conn->dcb();
@@ -1593,25 +1709,34 @@ bool Session::move_to(RoutingWorker* pTo)
 
     m_worker = pTo;     // Set before the move-operation, see DelayedRoutingTask.
 
-    bool posted = pTo->execute([this, pFrom, pTo, to_be_enabled]() {
-                                   pTo->session_registry().add(this);
+    auto receive_session = [this, pFrom, pTo, to_be_enabled]() {
+        pTo->session_registry().add(this);
 
-                                   m_client_conn->dcb()->set_owner(pTo);
-                                   m_client_conn->dcb()->set_manager(pTo);
+        m_client_conn->dcb()->set_owner(pTo);
+        m_client_conn->dcb()->set_manager(pTo);
 
-                                   for (mxs::BackendConnection* pBackend_conn : m_backends_conns)
-                                   {
-                                       pBackend_conn->dcb()->set_owner(pTo);
-                                       pBackend_conn->dcb()->set_manager(pTo);
-                                   }
+        for (mxs::BackendConnection* pBackend_conn : m_backends_conns)
+        {
+            pBackend_conn->dcb()->set_owner(pTo);
+            pBackend_conn->dcb()->set_manager(pTo);
+        }
 
-                                   if (!enable_events(to_be_enabled))
-                                   {
-                                       kill();
-                                   }
+        if (enable_events(to_be_enabled))
+        {
+            if (m_can_pool_backends)
+            {
+                // Schedule another check.
+                set_can_pool_backends(true);
+            }
+        }
+        else
+        {
+            kill();
+        }
 
-                                   MXS_NOTICE("Moved session from %d to %d.", pFrom->id(), pTo->id());
-                               }, mxb::Worker::EXECUTE_QUEUED);
+        MXS_NOTICE("Moved session from %d to %d.", pFrom->id(), pTo->id());
+    };
+    bool posted = pTo->execute(receive_session, mxb::Worker::EXECUTE_QUEUED);
 
     if (!posted)
     {
