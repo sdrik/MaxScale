@@ -393,7 +393,7 @@ void Session::set_can_pool_backends(bool value)
             {
                 m_idle_pool_call_id = m_worker->delayed_call(m_pooling_time_ms, &Session::pool_backends_cb,
                                                              this);
-                MXB_ERROR("conn poole check scheduled %li", m_pooling_time_ms);
+                //MXB_ERROR("conn pool check scheduled %li", m_pooling_time_ms);
             }
         }
     }
@@ -1762,7 +1762,7 @@ bool Session::pool_backends_cb(mxb::Worker::Call::action_t action)
         // Session has been idle for long enough, check that the connections have not had
         // any activity.
         auto* client = client_dcb;
-        MXB_ERROR("pool_backends_cb1");
+        //MXB_ERROR("pool_backends_cb1");
         if (client->state() == DCB::State::POLLING)
         {
             // TODO: should use 'epoll_tick_now' from Worker, but dcb uses 'mxs_clock'.
@@ -1771,13 +1771,14 @@ bool Session::pool_backends_cb(mxb::Worker::Call::action_t action)
             auto client_idle_tics = now - std::max(client->last_read(),
                                                    client->last_write());
             auto client_idle_ms = client_idle_tics * 100;
-            MXB_ERROR("pool_backends_cb2a: dcb idle: %li pooling time: %li", client_idle_ms, m_pooling_time_ms);
+            //MXB_ERROR("pool_backends_cb2a: dcb idle: %li pooling time: %li", client_idle_ms, m_pooling_time_ms);
             if (client_idle_ms >= m_pooling_time_ms)
             {
-                MXB_ERROR("pool_backends_cb2b");
+              //  MXB_ERROR("pool_backends_cb2b");
                 // Client connection is idle, try to pool backends.
-                auto& backends = backend_connections();
+                const auto& backends = backend_connections();
                 size_t n_pooled = 0;
+                size_t n_backends = backends.size(); // Need to read now, pooling modifies the vector.
                 for (auto& backend : backends)
                 {
                     if (backend->established() && backend->is_idle())
@@ -1788,17 +1789,18 @@ bool Session::pool_backends_cb(mxb::Worker::Call::action_t action)
                             if (pEp->try_to_pool())
                             {
                                 n_pooled++;
-                                MXB_ERROR("conn pooled");
+                //                MXB_ERROR("conn pooled");
                             }
                         }
                     }
                 }
 
-                if (n_pooled == backends.size())
+                if (n_pooled == n_backends)
                 {
                     // TODO: Think if there is some corner case where a connection is
                     // reattached to a session but clientReply is not called.
                     call_again = false;
+                  //  MXB_ERROR("all pooled");
                 }
             }
         }
