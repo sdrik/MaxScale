@@ -1986,6 +1986,8 @@ GWBUF* MariaDBBackendConnection::process_packets(GWBUF** result)
     size_t total_bytes = buffer.length();
     size_t bytes_used = 0;
 
+    gwbuf_hexdump_pretty(buffer.get());
+
     while (it != buffer.end())
     {
         size_t bytes_left = total_bytes - bytes_used;
@@ -2509,6 +2511,7 @@ MariaDBBackendConnection::TrackedQuery::TrackedQuery(GWBUF* buffer)
     , command(MYSQL_GET_COMMAND(GWBUF_DATA(buffer)))
     , id(gwbuf_get_id(buffer))
 {
+    gwbuf_hexdump_pretty(buffer, LOG_INFO);
     mxb_assert(gwbuf_is_contiguous(buffer));
 
     if (command == MXS_COM_STMT_EXECUTE)
