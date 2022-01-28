@@ -25,7 +25,7 @@ using namespace std::chrono_literals;
 namespace pinloki
 {
 
-using Callback = std::function<bool (const maxsql::RplEvent&)>;
+using Callback = std::function<void (const maxsql::RplEvent&)>;
 
 class Reader
 {
@@ -34,14 +34,17 @@ public:
            const std::chrono::seconds& heartbeat_interval);
     ~Reader();
 
+    void start();
+
+    void set_in_high_water(bool in_high_water);
+    void send_events();
+
 private:
     static uint32_t epoll_update(struct MXB_POLL_DATA* data, MXB_WORKER* worker, uint32_t events);
     void            start_reading();
     bool            poll_start_reading(mxb::Worker::Call::action_t action);
     void            notify_concrete_reader(uint32_t events);
-    void            handle_messages();
 
-    bool resend_event(mxb::Worker::Call::action_t);
     bool generate_heartbeats(mxb::Worker::Call::action_t action);
 
     struct PollData : public MXB_POLL_DATA
@@ -56,9 +59,9 @@ private:
     InventoryReader m_inventory;
     PollData        m_reader_poll_data;
     mxb::Worker*    m_worker;
-    uint32_t        m_dcid = 0;
     mxq::RplEvent   m_event;    // Stores the latest event that hasn't been processed
     maxbase::Timer  m_timer {10s};
+    bool            m_in_high_water;
 
     // Related to delayed start
     maxsql::GtidList m_start_gtid_list;

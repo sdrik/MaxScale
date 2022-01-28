@@ -92,6 +92,8 @@ PinlokiSession::PinlokiSession(MXS_SESSION* pSession, Pinloki* router)
     : mxs::RouterSession(pSession)
     , m_router(router)
 {
+    pSession->client_dcb->add_callback(DCB::Reason::HIGH_WATER, high_water_mark_reached, this);
+    pSession->client_dcb->add_callback(DCB::Reason::LOW_WATER, low_water_mark_reached, this);
 }
 
 PinlokiSession::~PinlokiSession()
@@ -123,13 +125,14 @@ bool PinlokiSession::routeQuery(GWBUF* pPacket)
         try
         {
             pinloki::Callback cb = [this](const mxq::RplEvent& event) {
-                    return send_event(event);
+                    send_event(event);
                 };
 
             m_reader = std::make_unique<Reader>(
                 cb, m_router->inventory()->config(),
                 mxs::RoutingWorker::get_current(),
                 m_gtid_list, std::chrono::seconds(m_heartbeat_period));
+            m_reader->start();
             rval = 1;
         }
         catch (const GtidNotFoundError& err)
@@ -203,38 +206,26 @@ mxs::Buffer PinlokiSession::make_buffer(Prefix prefix, const uint8_t* ptr, size_
     return buffer;
 }
 
-bool PinlokiSession::send_event(const maxsql::RplEvent& event)
+void PinlokiSession::send_event(const maxsql::RplEvent& event)
 {
-    bool can_write = m_pSession->client_dcb->writeq() == nullptr
-        || gwbuf_length(m_pSession->client_dcb->writeq()) < mxs::Config::get().writeq_high_water.get();
+    const uint8_t* ptr = reinterpret_cast<const uint8_t*>(event.pBuffer());
+    long size = event.buffer_size();
+    Prefix prefix = PREFIX_OK;
 
-    if (can_write)
+    while (size > 0)
     {
-        const uint8_t* ptr = reinterpret_cast<const uint8_t*>(event.pBuffer());
-        long size = event.buffer_size();
-        Prefix prefix = PREFIX_OK;
+        size_t payload_len = std::min(size, GW_MYSQL_MAX_PACKET_LEN - prefix);
+        send(make_buffer(prefix, ptr, payload_len).release());
 
-        while (size > 0)
+        if (size == GW_MYSQL_MAX_PACKET_LEN - prefix)
         {
-            size_t payload_len = std::min(size, GW_MYSQL_MAX_PACKET_LEN - prefix);
-            send(make_buffer(prefix, ptr, payload_len).release());
-
-            if (size == GW_MYSQL_MAX_PACKET_LEN - prefix)
-            {
-                send(make_buffer(PREFIX_NONE, nullptr, 0).release());
-            }
-
-            prefix = PREFIX_NONE;
-            ptr += payload_len;
-            size -= payload_len;
+            send(make_buffer(PREFIX_NONE, nullptr, 0).release());
         }
-    }
-    else
-    {
-        MXS_DEBUG("Buffer full, %u bytes buffered", gwbuf_length(m_pSession->client_dcb->writeq()));
-    }
 
-    return can_write;
+        prefix = PREFIX_NONE;
+        ptr += payload_len;
+        size -= payload_len;
+    }
 }
 
 void PinlokiSession::send(GWBUF* buffer)
@@ -242,6 +233,33 @@ void PinlokiSession::send(GWBUF* buffer)
     const mxs::ReplyRoute down;
     const mxs::Reply reply;
     mxs::RouterSession::clientReply(buffer, down, reply);
+}
+
+int PinlokiSession::high_water_mark_reached(DCB* dcb, DCB::Reason reason, void* userdata)
+{
+    std::cerr << "*** high_water_mark_reached" << std::endl;
+    PinlokiSession* pSession = static_cast<PinlokiSession*>(userdata);
+
+    if (pSession->m_reader.get())
+    {
+        pSession->m_reader->set_in_high_water(true);
+    }
+    return 0;
+}
+
+int PinlokiSession::low_water_mark_reached(DCB* dcb, DCB::Reason reason, void* userdata)
+{
+    std::cout << "low_water_mark_reached" << std::endl;
+    PinlokiSession* pSession = static_cast<PinlokiSession*>(userdata);
+    pSession->m_reader->set_in_high_water(false);
+
+    auto callback = [pSession]() {
+            pSession->m_reader->send_events();
+        };
+
+    mxs::RoutingWorker::get_current()->execute(callback, mxs::RoutingWorker::EXECUTE_QUEUED);
+
+    return 0;
 }
 
 void PinlokiSession::select(const std::vector<std::string>& fields, const std::vector<std::string>& aliases)
