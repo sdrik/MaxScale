@@ -1119,6 +1119,17 @@ MariaDBUserManager::load_users_from_file(const string& source, UserDatabase* out
                     handler_helper(grant_data, ind, grp_db, "db", db_grants_temp, n_grants);
                 };
             process_array(all, grp_db, grant_handler);
+
+            //UsersFileUsage users_file_usage;
+            //MutexLock lock(m_settings_lock);
+            //users_file_usage = m_users_file_usage;
+            //lock.unlock();
+            //if (users_file_usage == UsersFileUsage::FILE_ONLY_ALWAYS)
+            //{
+                for (auto const& db_grants : db_grants_temp)
+                    for (auto const& db_grant : db_grants.second)
+                        output->add_database_name(db_grant);
+            //}
             // Add all the db grants as wildcard grants, as we cannot know which type it is.
             UserDatabase::StringSetMap dummy;
             output->add_db_grants(move(db_grants_temp), move(dummy));
@@ -1835,6 +1846,7 @@ bool UserDatabase::empty() const
 
 void UserDatabase::add_database_name(const std::string& db_name)
 {
+    MXB_INFO("add_database_name: %s", db_name.c_str());
     m_database_names.insert(db_name);
 }
 
